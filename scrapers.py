@@ -15,8 +15,38 @@ import os, glob
 import pyfun.timestrings as timestr
 
 
+def get_subfolders(searchpath, level=1):
+    '''
+    get subfolders
+    :param searchpath:
+    :param level: how deep to search
+    :return:
+    '''
 
-def get_subsess_paths(animal_name, animal_root, verbose=False):
+    if level==1:
+        subfolders = [[f.name, f.path] for f in os.scandir(searchpath) if f.is_dir()]
+    else:
+        raise ValueError('Sorry only have level 1 now.')
+
+    return subfolders
+
+
+def process_subfolders(subfolders):
+    """
+    Generator function, which iterates through a list of subfolders
+    ([fd.name, fd.path]) and checks if fd.name contains datestring.
+    Yields each [fd.name, fd.path] for which the datestring exists.
+    """
+
+    for [fd_name, fd_path] in subfolders:
+
+        fd_dateinfo = timestr.search(fd_name, verbose=False)  # search for a timestamp in folder name
+        if fd_dateinfo is not None:
+            yield [fd_name, fd_path]
+
+
+
+def get_subsess_paths_old(animal_name, animal_root, verbose=False):
     """
     scrape data folder for one animal, and return all the corresponding data files, grouped by timestamp
     It is assumed that the file structure is:
