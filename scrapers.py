@@ -45,9 +45,48 @@ def process_subfolders(subfolders):
             yield [fd_name, fd_path]
 
 
+def get_subsess_paths(animal_name, animal_root, remove_prefix='results_', verbose=False):
+    """
+    scrape data folder for one animal, and return all the corresponding data files, grouped by timestamp
+    It is assumed that the file structure is:
+
+    animal_id/datetime/results_datetime2/*.csv
+
+    :param animal_root: path to data folder containing all sessions belonging to one animal
+    :return:
+    """
+
+    subsess_paths = defaultdict(AddOnlyDict)
+
+    subfolders_1 = get_subfolders(animal_root)  # one level down
+
+    for [subfolder_1_name, subfolder_1_path] in process_subfolders(subfolders_1):
+        subfolder_1_date = timestr.search(subfolder_1_name)[1]
+
+        subfolders_2 = get_subfolders(subfolder_1_path)  # two levels down
+
+        for [subfolder_2_name, subfolder_2_path] in process_subfolders(subfolders_2):
+
+            subfolder_2_date = timestr.search(subfolder_2_name)[1]
+
+            # ===check that timestamp of inner subfolder is later than timestamp of outer subfolder
+            if subfolder_1_date > subfolder_2_date:
+                raise ValueError(
+                    "Error! File {} \noccurs earlier than folder {} ".format(subfolder_2_name, subfolder_1_name))
+
+            file_searchstr = os.path.join(subfolder_2_path, '*.csv')
+            filenames = [os.path.basename(f) for f in glob.glob(file_searchstr)]
+
+            for fn in filenames:
+                file_type = fn.split('.')[0]
+                subsess_paths[subfolder_2_name.replace(remove_prefix, '')][file_type] = os.path.join(subfolder_2_path, fn)
+
+    return subsess_paths
+
 
 def get_subsess_paths_old(animal_name, animal_root, verbose=False):
     """
+    NOTE: DEPRECATED 03.21.23
     scrape data folder for one animal, and return all the corresponding data files, grouped by timestamp
     It is assumed that the file structure is:
 
