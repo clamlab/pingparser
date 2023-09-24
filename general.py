@@ -4,6 +4,9 @@ these are semi-colon(;)-delimited .csv files where each row is
 TrialNum, Subject, Value, Timestamp
 """
 
+BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
+
+
 import pandas as pd, numpy as np
 import pyfun.bamboo as boo
 
@@ -120,9 +123,36 @@ def str_to_list(input_str, brackets='round', dtype='float'):
     for r in to_remove:
         input_str = input_str.replace(r, '')
 
-    out_list = [s for s in input_str.split(',')]
+    #out_list = [s for s in input_str.split(',')]
+    out_list = input_str.split(',')
 
     if dtype=="float":
         out_list = [float(s) for s in out_list]
 
     return out_list
+
+
+def str_to_list_col(df, col, label1, label2, drop=True):
+    """
+    Takes a DataFrame df with a column (col) of strings representing lists,
+    convers these strings to actual lists, then splits into individual columns.
+    these columns will be named label1, label2.
+    Currently only handles length-2 lists.
+
+    TODO: expand to more general case where it's a list of arbitary length
+    """
+
+    df = df.copy()
+    xy_series = df['Value'].apply(lambda lst_str: str_to_list(lst_str))
+    xy_arr = np.array(xy_series.tolist())
+
+    if xy_arr.shape[1] != 2:
+        raise ValueError('Lists should be length 2.')
+
+    df[label1] = xy_arr[:, 0]
+    df[label2] = xy_arr[:, 1]
+
+    if drop:
+        df = df.drop(col, axis=1)
+
+    return df

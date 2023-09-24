@@ -2,11 +2,11 @@
 event parser for pSWM touchscreen setup
 """
 
-COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac', 'Cue_D',
+COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac', 'Cue_D', 'CueGoneDist',
             'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y',
             'Cue1_x', 'Cue1_y', 'Cue2_x', 'Cue2_y',
             'anchor1_x', 'anchor1_y', 'anchor2_x', 'anchor2_y',
-            ]
+            'WMTrial']
 
 import pandas as pd
 from ..import general as genparse
@@ -33,8 +33,12 @@ def trial_summary(df_trial):
 
     row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
-    for param in ['FixationDur', 'RespError_cuefrac', 'Cue_D']:
+    for param in ['FixationDur', 'RespError_cuefrac']:
         row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float')
+
+    for param in ['WMTrial']:
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='string')
+
 
     for param, prefix in zip(['Cue_xy', 'anchor_xy', 'Cue_xyRel'],
                              ['Cue'   , 'anchor',    'CueRel']):
