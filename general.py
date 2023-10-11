@@ -11,6 +11,110 @@ import pandas as pd, numpy as np
 import pyfun.bamboo as boo
 
 
+def create_index_dict(df, column_name, return_type='first', error_on_multiple=True):
+    """
+    Creates a dictionary with unique column values as keys and their respective indices as values.
+
+    Parameters:
+    - df (pd.DataFrame): The input DataFrame.
+    - column_name (str): The name of the column to create the dictionary from.
+    - return_type (str, optional): Type of indices to return; can be 'all', 'first', or 'last'. Default is 'all'.
+    - error_on_multiple (bool, optional): If True, raises a ValueError when multiple indices are found and return_type is not 'all'. Default is False.
+
+    Returns:
+    - dict: A dictionary with unique column values as keys and indices as values.
+    """
+
+    # Check if the column_name exists in the DataFrame
+    if column_name not in df.columns:
+        raise ValueError(f"Column '{column_name}' not found in DataFrame")
+
+    # Check if return_type is valid
+    if return_type not in ['all', 'first', 'last']:
+        raise ValueError("return_type must be one of ['all', 'first', 'last']")
+
+    # Creating the dictionary
+    trial_dict = {key: list(value.index) for key, value in df.groupby(column_name)}
+
+    # Modify the dictionary based on return_type and error_on_multiple
+    if return_type in ['first', 'last']:
+        for key, indices in trial_dict.items():
+            if error_on_multiple and len(indices) > 1:
+                raise ValueError(f"Multiple indices found for '{key}' in column '{column_name}'")
+            trial_dict[key] = indices[0] if return_type == 'first' else indices[-1]
+
+    return trial_dict
+
+
+def get_trial_event_indices(df_raw, event_name):
+    trialnum_col = 'TrialNum'
+    df = boo.slice(df_raw, {'Value': [event_name]})[[trialnum_col]]
+    indices_dict = create_index_dict(df, trialnum_col)
+
+    return indices_dict
+
+
+def get_values_closest_to_event(filledin, event_indices, trialnum_col='TrialNum', value_col='Value'):
+    data = []
+
+    for trialnum, event_idx in event_indices.items():
+        # Filter rows for current TrialNum that are before the event index
+        filtered_rows = filledin[(filledin[trialnum_col] == trialnum) & (filledin.index < event_idx)]
+
+        if not filtered_rows.empty:
+            # Take the last row as it's the closest before the event
+            closest_row = filtered_rows.iloc[-1]
+            data.append({
+                trialnum_col: trialnum,
+                value_col: closest_row[value_col]
+            })
+
+    return pd.DataFrame(data)
+
+
+def runningval_insert(df, trialnum_col='TrialNum', value_col='Value'):
+    """
+    This function inserts rows in the dataframe for every trial number and for any missing trial numbers.
+    Each new row takes the value of the preceding trial.
+    """
+    # Sort DataFrame based on trialnum_col for consistency
+    df = df.sort_values(by=trialnum_col)
+
+    insertion_index_offset = 0.00001
+    prev_trial_value = None
+    prev_trial_num = None
+    prev_index = None
+
+    rows_to_insert = []
+
+    for index, row in df.iterrows():
+        current_trialnum = row[trialnum_col]
+        current_value = row[value_col]
+
+        # If we've processed at least one row before
+        if prev_trial_num is not None:
+            # Check for missing trial numbers and fill them in
+            for missing_trial_num in range(prev_trial_num + 1, current_trialnum):
+                prev_index += insertion_index_offset
+                rows_to_insert.append((prev_index, missing_trial_num, prev_trial_value))
+
+            # Append the row for the current trial
+            prev_index += insertion_index_offset
+            rows_to_insert.append((prev_index, current_trialnum, prev_trial_value))
+
+        prev_trial_value = current_value
+        prev_trial_num = current_trialnum
+        prev_index = index
+
+    # Add the new rows to the dataframe
+    for idx, trialnum, value in rows_to_insert:
+        df.loc[idx] = {trialnum_col: trialnum, value_col: value}
+
+    # Sort by index to ensure the new rows are in the correct place
+    df = df.sort_index()
+
+    return df
+
 
 def read_raw(csv_file, delimiter=';', colnames=["TrialNum", "Subject", "Value", "Timestamp"]):
     """
