@@ -2,10 +2,10 @@
 event parser for pSWM Lorena setup
 """
 
-COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac', 'Cue_D', 'CueGoneDist',
+COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac', 'Cue_D', 'CueGoneDist_cuefrac',
             'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y',
             'Cue1_x', 'Cue1_y', 'Cue2_x', 'Cue2_y',
-            'stick1_x', 'stick1_y', 'stick2_x', 'stick2_y',
+            'stick1_x', 'stick1_y', 'stick2_x', 'stick2_y', 'WMDelay',
             'WMTrial']
 
 import pandas as pd
@@ -33,7 +33,7 @@ def trial_summary(df_trial):
 
     row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
-    for param in ['FixationDur', 'RespError_cuefrac']:
+    for param in ['RespError_cuefrac']:
         row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float')
 
     for param in ['WMTrial']:
