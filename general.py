@@ -9,6 +9,49 @@ BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
 import pandas as pd, numpy as np
 import pyfun.bamboo as boo
+import random
+from . import runningval
+
+
+def random_check(anim, running_subj=[]):
+    """
+    subsess_dict: given some anim, randomly pick a session, and a trial
+                  for sanity checking
+
+    running_values: names of subjects to print the most recent value (on current trial, or closest previous trial)
+                    note--this doesn't care whether value occurred before or after fixation
+
+    output: prints row summary of randomly-selected trial
+            saves raw eventpings of selected trial, and previous, into foo.csv
+            prints running values: [val on current trial if found, trial number of found recent val, val]
+                --> NB. if running value found for current trial, could have occurred b4/after fixation, so check raw
+    """
+
+    print("LOOK IN foo.csv for raw trial pings")
+    print()
+
+    subsess_df = random.choice(list(anim.subsess.values()))
+    row = subsess_df.sample(n=1).iloc[0]
+    subsess_name = row['sess']
+
+    print(anim.name, subsess_name)
+    print()
+
+    fn = anim.subsess_paths[subsess_name]['Events']
+    df_sess_raw = read_raw(fn)
+
+    trial_num = row['TrialNum']
+
+    df_trial_raw = boo.slice(df_sess_raw, {'TrialNum': [trial_num - 1, trial_num]})
+    df_trial_raw.to_csv('foo.csv', index=False)
+
+    vals_all = {}
+    for subj_name in running_subj:
+        vals_all[subj_name] = runningval.find_recent(df_sess_raw, subj_name, trial_num)
+
+    print(row)
+    print()
+    print(vals_all)
 
 
 
@@ -35,27 +78,88 @@ def format_prepost_xy(param_prepost, prefix):
     return output
 
 
-
-def sess_summary(df_sess, sess_name, colnames, trial_summarizer):
+def sess_summary(df_sess_raw, sess_name, expt_module):
     """
     process one session raw file and return one info row per trial
-    :function trial_summarizer: trial_summary method
+    :expt_module: module that contains helper functions and attribs specific to the bonsai experiment
     """
 
-    one_sess = []
-    df_sess = boo.slice(df_sess, {'TrialNum': [0]}, '-') #remove trial 0
-    for TrialNum, df_trial in df_sess.groupby('TrialNum'):
+    pre_processor = expt_module.pre_processor
+    trial_summarizer = expt_module.trial_summarizer
+    running_valuator = expt_module.running_valuator
+    colnames = expt_module.COLNAMES
+
+
+    if len(df_sess_raw) == 0:
+        return pd.DataFrame()
+
+    # === pre-process ===
+    if pre_processor is not None:
+        df_sess_raw = pre_processor(df_sess_raw)
+    #df_sess_raw = boo.slice(df_sess_raw, {'TrialNum': [0]}, '-') #remove trial 0
+
+    # === extract values trial by trial and compile into a list ===
+    sess_extracts = []
+
+    for TrialNum, df_trial in df_sess_raw.groupby('TrialNum'):
         one_trial = trial_summarizer(df_trial)
         if one_trial is not None:
-            one_sess.append(one_trial['val'].tolist())
+            sess_extracts.append(one_trial['val'].tolist())
 
-    one_sess_df = pd.DataFrame(one_sess, columns=colnames)
+    df_sess = pd.DataFrame(sess_extracts, columns=colnames) #convert list into DataFrame
+
+    if len(df_sess) == 0:
+        return pd.DataFrame()
+
+    # === compute running values (can't do separately per trial) ===
+    running_vals = running_valuator(df_sess_raw)
+    for subj_name, vals in running_vals.items():
+        try:
+            df_sess = boo.merge_update(df_sess, vals, subj_name, match_column='TrialNum')
+        except KeyError: #if dataframe is empty, 'TrialNum' does not exist
+            continue
 
     #one_sess_df['warmup'] = one_sess_df['TrialNum'] <= lora.find_warm_up_done(df_sess)
-    one_sess_df['sess'] = sess_name
+    df_sess['sess'] = sess_name
 
-    return one_sess_df
+    return df_sess
 
+
+"""
+def sess_summary(df_sess_raw, sess_name, colnames, trial_summarizer, pre_processor=None):
+
+    #process one session raw file and return one info row per trial
+    #:function trial_summarizer: trial_summary method
+
+    if len(df_sess_raw) == 0:
+        return None
+
+    # === pre-process ===
+    if pre_processor is not None:
+        df_sess_raw = pre_processor(df_sess_raw)
+    df_sess_raw = boo.slice(df_sess_raw, {'TrialNum': [0]}, '-') #remove trial 0
+
+    # === extract values trial by trial and compile into a list ===
+    sess_extracts = []
+
+    for TrialNum, df_trial in df_sess_raw.groupby('TrialNum'):
+        one_trial = trial_summarizer(df_trial)
+        if one_trial is not None:
+            sess_extracts.append(one_trial['val'].tolist())
+
+    df_sess = pd.DataFrame(sess_extracts, columns=colnames) #convert list into DataFrame
+
+    # === compute running values (can't do separately per trial) ===
+
+
+    #one_sess_df['warmup'] = one_sess_df['TrialNum'] <= lora.find_warm_up_done(df_sess)
+    df_sess['sess'] = sess_name
+
+    if len(df_sess) == 0:
+        return None
+    else:
+        return df_sess
+"""
 
 def get_trial_param(df_trial, param, dtype, single=True):
     matches = boo.slice(df_trial, {'Subject': [param]}, '+')['Value'].tolist()
@@ -83,7 +187,7 @@ def get_trial_param(df_trial, param, dtype, single=True):
 
 def closest_to_row(df, param_name, target_row, neighbors="pre_post"):
     """
-    given a target_row, return values of a param (param_name) that occurred closest to it.
+    given a target_row, return values (list) of a param (param_name) that occurred closest to it.
     can return just the closest value before target_row,
          or additionally closest value after target_row,
 

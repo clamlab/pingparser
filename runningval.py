@@ -9,7 +9,7 @@ BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
 import pandas as pd, numpy as np
 import pyfun.bamboo as boo
-
+from . import general as genparse
 
 def create_index_dict(df, column_name, return_type='first', error_on_multiple=True):
     """
@@ -44,6 +44,27 @@ def create_index_dict(df, column_name, return_type='first', error_on_multiple=Tr
             trial_dict[key] = indices[0] if return_type == 'first' else indices[-1]
 
     return trial_dict
+
+
+def find_recent(df_sess_raw, subj_name, trial_num):
+    # find most recent saved running value in session raw, starting from trial_num
+    val = None
+    i = trial_num
+
+    target_trial_val = None
+
+    while (i > 0):
+        i_df = boo.slice(df_sess_raw, {'TrialNum': [i]})
+        val = genparse.get_trial_param(i_df, subj_name, dtype='float')
+
+        if i == trial_num:
+            target_trial_val = val
+        else:
+            if val is not None:
+                break
+        i -= 1
+
+    return [target_trial_val, i, val]
 
 
 def get(df_raw, subj_names, event_anchor='FixationCompleted', debug=False):
