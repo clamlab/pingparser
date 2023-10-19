@@ -7,14 +7,20 @@ from ..import general as genparse
 import pyfun.bamboo as boo
 from .. import runningval
 
+VERSION = "lorena_v01"
+DATE = "10.18.23"
+ORIGINAL_NAME = "lorena.py"
+
+
 COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
-            'Cue_D', 'CueGoneDist_cuefrac', 'RespPause', 'RespBox_type',
+            'Cue_D', 'CueGoneDist_cuefrac', 'CueMove',
+            'RespPause', 'RespBox_type',
             'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y',
             'Cue1_x', 'Cue1_y', 'Cue2_x', 'Cue2_y',
             'stick_angle1', 'stick_angle2',
             'stick1_x', 'stick1_y', 'stick2_x', 'stick2_y',
             'stickhead1_x', 'stickhead1_y', 'stickhead2_x', 'stickhead2_y',
-            'WMDelay','WMTrial']
+            'WMDelay', 'WMTrial']
 
 
 #list of dictionary for slicing away raw df (with bamboo.slice, polarity '-), in pre_processor()
@@ -32,6 +38,13 @@ def pre_processor(df_sess_raw):
 
     return df
 
+def post_processor(df):
+    #1. create variable for CueMove
+    df['CueMove'] = (df['Cue1_x'] == df['Cue2_x']) & (df['Cue1_y'] == df['Cue2_y']) == False
+
+    #2. convert WMTrial variable from string to boolean
+    df['WMTrial'] = df['WMTrial']=='True'
+    return df
 
 def running_valuator(df_sess_raw):
     #extract running values (cannot be done separately using trial summarizer)

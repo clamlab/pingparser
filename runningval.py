@@ -55,7 +55,7 @@ def find_recent(df_sess_raw, subj_name, trial_num):
 
     while (i > 0):
         i_df = boo.slice(df_sess_raw, {'TrialNum': [i]})
-        val = genparse.get_trial_param(i_df, subj_name, dtype='float')
+        val = genparse.get_trial_param(i_df, subj_name, dtype='float', single=False)
 
         if i == trial_num:
             target_trial_val = val
