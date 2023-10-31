@@ -85,28 +85,26 @@ def sess_summary(df_sess_raw, sess_name, expt_module):
 
     return df_sess
 
-def get_trial_param(df_trial, param, dtype, single=True):
+def get_trial_param(df_trial, param, dtype, single):
     matches = boo.slice(df_trial, {'Subject': [param]}, '+')['Value'].tolist()
 
     if len(matches) == 0:
         return None
-    elif len(matches)>0:
+    elif len(matches) > 0:
         #=== type conversion ===
-        if dtype=='float':
+        if dtype == 'float':
             matches = [float(s) for s in matches]
 
         if len(matches) == 1:
             return matches[0]
-
-        #=== check that there are expected number of values ===
-        if (len(matches) > 1) and single:
-            print(param,'multiple found')
-            return matches[-1]
-
-            #TODO fix
-            #raise ValueError('Expected single value, but got multiple')
-
-        return matches
+        else: #len(matches) > 1
+            if single == 'last':
+                return matches[-1] #return the last value
+            elif single == 'strict':
+                raise ValueError('Expected single value, but got multiple')
+            else:
+                err_msg = "Multiple matches found, but unknown single parameter" + single
+                raise ValueError(err_msg)
 
 
 def closest_to_row(df, param_name, target_row, neighbors="pre_post"):

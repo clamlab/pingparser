@@ -55,7 +55,7 @@ def find_recent(df_sess_raw, subj_name, trial_num):
 
     while (i > 0):
         i_df = boo.slice(df_sess_raw, {'TrialNum': [i]})
-        val = genparse.get_trial_param(i_df, subj_name, dtype='float', single=False)
+        val = genparse.get_trial_param(i_df, subj_name, dtype='float', single='last')
 
         if i == trial_num:
             target_trial_val = val
@@ -95,8 +95,21 @@ def get(df_raw, subj_names, event_anchor='FixationCompleted', debug=False):
 
 
 def get_trial_event_indices(df_raw, event_name):
+    """
+    given raw, find all the row numbers where some event occurred for each trial.
+    this assumes that there is at most  one such instance of the event, per trial.
+    if more than one was found (this bug has been observed once), then it drops those trials entirely
+    """
+
     trialnum_col = 'TrialNum'
     df = boo.slice(df_raw, {'Value': [event_name]})[[trialnum_col]]
+
+    #drop trials where more than one instance of event found
+    # Find duplicated rows (including first occurrence)
+    duplicates = df.duplicated(subset = trialnum_col, keep=False)
+    # Remove duplicated rows
+    df = df[~duplicates]
+
     indices_dict = create_index_dict(df, trialnum_col)
 
     return indices_dict

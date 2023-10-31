@@ -69,6 +69,8 @@ def random_trial(anim, running_subj, mode='big'):
     print()
     print(vals_all)
 
+    return row
+
 
 def new_df_lens(expt):
     all_passed = True
@@ -96,14 +98,20 @@ def subsess_lens(expt):
     for anim_name, anim in expt.anim.items():
 
         for sess_name, sess_df in anim.sess.items():
-            subsess_n_all = sess_df['sess'].value_counts()
-            sess_date = sess_df['date'].iloc[0]
+            if len(sess_df) > 0:
+                subsess_n_all = sess_df['sess'].value_counts()
+            else:
+                subsess_n_all = None
 
-            subsess_on_date = timestr.filter_by_date(anim.subsess, sess_date)
+            subsess_on_date = timestr.filter_by_date(anim.subsess, sess_name)
 
             for subsess_df in subsess_on_date.values():
-                subsess_name = subsess_df.sess.iloc[0]
+
                 n_actual = len(subsess_df)
+                if n_actual == 0:
+                    continue
+
+                subsess_name = subsess_df.sess.iloc[0]
 
                 if subsess_name in subsess_n_all:
                     n_in_merged = subsess_n_all[subsess_name]

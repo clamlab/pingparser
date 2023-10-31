@@ -3,13 +3,13 @@ event parser for pSWM Lorena setup
 """
 
 import pandas as pd
-from ..import general as genparse
+import pingparser.general as genparse
 import pyfun.bamboo as boo
-from .. import runningval
+import pingparser.runningval as runningval
 
 VERSION = "lorena_v01"
 DATE = "10.18.23"
-ORIGINAL_NAME = "lorena.py"
+ORIGINAL_NAME = "event_extractors/lorena.py"
 
 
 COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
@@ -20,6 +20,7 @@ COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
             'stick_angle1', 'stick_angle2',
             'stick1_x', 'stick1_y', 'stick2_x', 'stick2_y',
             'stickhead1_x', 'stickhead1_y', 'stickhead2_x', 'stickhead2_y',
+            'Welzl_x', 'Welzl_y', 'Welzl_D',
             'WMDelay', 'WMTrial']
 
 
@@ -61,7 +62,7 @@ def trial_summarizer(df_trial):
 
     fixated = boo.slice(df_trial, {'Value': ['FixationCompleted']}, '+')  # index where InTimerCompleted
 
-    if len(fixated) == 0:  # TODO account for trials where fixation did not complete
+    if len(fixated) != 1:  # TODO account for trials where fixation did not complete, there was more than 1 FixationCompleted (bug/error)
         return None
 
     fixated_row = fixated.index[0]
@@ -72,10 +73,28 @@ def trial_summarizer(df_trial):
     row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
     for param in ['RespError_cuefrac']:
-        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float')
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='strict')
+
+    for param in ['Welzl_D']:
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='last')
+
+
+    #extract xy subjects that are not prepost (below)
+    for xy_param in ['Welzl']:
+        xy_str = genparse.get_trial_param(df_trial, xy_param+'_xy',
+                                          dtype='string', single='last')
+        if xy_str is None: #not found
+            xy = (None, None)
+        else:
+            xy = genparse.str_to_list(xy_str)
+
+        row_holder.loc[xy_param + '_x'] = xy[0]
+        row_holder.loc[xy_param + '_y'] = xy[1]
+
+
 
     for param in ['RespBox_type','WMTrial']:
-        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='string')
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='string', single='last')
 
     # === params with xy, and pre and post fixation ===
     for param, prefix in zip(['Cue_xy', 'stickhead_xy', 'stick_xy', 'Cue_xyRel'],
