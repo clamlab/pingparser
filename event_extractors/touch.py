@@ -2,19 +2,66 @@
 event parser for pSWM touchscreen setup
 """
 
-COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac', 'Cue_D', 'CueGoneDist',
+import pandas as pd
+import pingparser.general as genparse
+import pyfun.bamboo as boo
+import pingparser.runningval as runningval
+
+VERSION = "touch_v01"
+DATE = "11.03.23"
+ORIGINAL_NAME = "event_extractors/touch.py"
+
+
+
+COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
+            'Cue_D', 'CueGoneDist', 'CueMove',
+            'RespPause', 'RespBox_type',
             'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y',
             'Cue1_x', 'Cue1_y', 'Cue2_x', 'Cue2_y',
             'anchor1_x', 'anchor1_y', 'anchor2_x', 'anchor2_y',
-            'WMTrial']
+            'Welzl_x', 'Welzl_y', 'Welzl_D',
+            'WMDelay', 'WMTrial',
+            'optoTrial']
 
-import pandas as pd
-from ..import general as genparse
-import pyfun.bamboo as boo
+#list of dictionary for slicing away raw df (with bamboo.slice, polarity '-), in pre_processor()
+RAW_TO_DELETE = []
+
+#list of running values to grab using runningval
+RUNNING_VALS = ['Cue_D', 'CueGoneDist','FixationDur','RespPause','WMDelay']
+
+
+def pre_processor(df_sess_raw):
+    df = df_sess_raw.copy()
+
+    for r in RAW_TO_DELETE:
+        df = boo.slice(df, r, '-')
+
+    return df
+
+def post_processor(df):
+
+    #1. create variable for CueMove
+    df['CueMove'] = (df['Cue1_x'] == df['Cue2_x']) & (df['Cue1_y'] == df['Cue2_y']) == False
+
+    #2. convert WMTrial variable from string to boolean
+    df['WMTrial'] = df['WMTrial']=='True'
+
+    #3. typecast
+    for subj in ['WMDelay', 'Cue_D']:
+        df[subj] = df[subj].astype('float')
+
+    return df
 
 
 
-def trial_summary(df_trial):
+def running_valuator(df_sess_raw):
+    #extract running values (cannot be done separately using trial summarizer)
+    vals_all = runningval.get(df_sess_raw, RUNNING_VALS, debug=False)
+    return vals_all
+
+
+
+def trial_summarizer(df_trial):
     """
     df_trial: df containing all events restricted to a single trial.
     return crucial trial info as a single row
@@ -33,11 +80,26 @@ def trial_summary(df_trial):
 
     row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
-    for param in ['FixationDur', 'RespError_cuefrac']:
-        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float')
+    for param in ['RespError_cuefrac']:
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='strict')
 
-    for param in ['WMTrial']:
-        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='string')
+    for param in ['Welzl_D']:
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='last')
+
+    #extract xy subjects that are not prepost (below)
+    for xy_param in ['Welzl']:
+        xy_str = genparse.get_trial_param(df_trial, xy_param+'_xy',
+                                          dtype='string', single='last')
+        if xy_str is None: #not found
+            xy = (None, None)
+        else:
+            xy = genparse.str_to_list(xy_str)
+
+        row_holder.loc[xy_param + '_x'] = xy[0]
+        row_holder.loc[xy_param + '_y'] = xy[1]
+
+    for param in ['RespBox_type','WMTrial','optoTrial']:
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='string', single='last')
 
 
     for param, prefix in zip(['Cue_xy', 'anchor_xy', 'Cue_xyRel'],

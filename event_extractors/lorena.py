@@ -25,7 +25,9 @@ COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
 
 
 #list of dictionary for slicing away raw df (with bamboo.slice, polarity '-), in pre_processor()
-RAW_TO_DELETE = [{'Subject':['RespError_cuefrac'],'TrialNum':[1], 'Value':['0']}]
+RAW_TO_DELETE = [{'Subject':['RespError_cuefrac'],
+                  'TrialNum':[1],
+                  'Value':['0']}]
 
 #list of running values to grab using running val
 RUNNING_VALS = ['Cue_D', 'CueGoneDist_cuefrac','FixationDur','RespPause','WMDelay']

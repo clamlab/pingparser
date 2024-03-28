@@ -1,13 +1,17 @@
-
+#TODO: harmonize with lorena tracking. the two are identical except for the marker indicating counted touch
 
 BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
-from . import general as genparse
-import pandas as pd, numpy as np
+import pingparser.general as genparse
+import pandas as pd
 import pyfun.bamboo as boo, pyfun.timestrings as timestr
 
+VERSION = "touch_v01"
+DATE = "11.03.23"
+ORIGINAL_NAME = "tracking/touch.py"
 
-def process_touch(fn, sess_name):
+
+def resp_xy(fn, sess_name, tracker_name):
     """
     process touch for a single session csv
     """
@@ -58,7 +62,7 @@ def process_touch(fn, sess_name):
         if len(touch_rows) == 0:
             raise ValueError('No rows found. This is not possible, because of the way row_key was created')
 
-        touch_rows = boo.slice(touch_rows, {'Subject': ['Touch_xy_bs']})[['Value', 'Timestamp']]
+        touch_rows = boo.slice(touch_rows, {'Subject': [tracker_name]})[['Value', 'Timestamp']]
 
         touch_rows['Timestamp'] = timestr.parse_time_col(touch_rows['Timestamp'])  # convert strings to timestamps
         touch_rows = genparse.str_to_list_col(touch_rows, 'Value', 'x', 'y')  # convert xy_str to x and y columns

@@ -1,6 +1,4 @@
-
 #TODO: harmonize this with touch.py
-
 
 BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
@@ -13,7 +11,7 @@ DATE = "10.18.23"
 ORIGINAL_NAME = "tracking/lorena.py"
 
 
-def resp_xy(fn, sess_name):
+def resp_xy(fn, sess_name, tracker_name):
     """
     process response tracking for a single session csv
     """
@@ -64,7 +62,7 @@ def resp_xy(fn, sess_name):
         if len(trial_rows) == 0:
             raise ValueError('No rows found. This is not possible, because of the way row_key was created')
 
-        trial_rows = boo.slice(trial_rows, {'Subject': ['snout_xy']})[['Value', 'Timestamp']]
+        trial_rows = boo.slice(trial_rows, {'Subject': [tracker_name]})[['Value', 'Timestamp']]
 
         trial_rows['Timestamp'] = timestr.parse_time_col(trial_rows['Timestamp'])  # convert strings to timestamps
         trial_rows = genparse.str_to_list_col(trial_rows, 'Value', 'x', 'y')  # convert xy_str to x and y columns
@@ -101,6 +99,13 @@ def cam2bs(df: pd.DataFrame, overwrite: bool = False) -> pd.DataFrame:
         [0.013579130748207479, 11.850996784005718, -0.20830413790599578],
         [-0.0465170028745135, 0.2072642741558346, 0.9951820131724353]
     ])
+
+    cam2bs_mat = np.array([
+        [-9.639814839905778, -9.639814839905778, -0.24301057903562098],
+        [0.013579130748207479, 11.850996784005718, -0.20830413790599578],
+        [-0.0465170028745135, 0.2072642741558346, 0.9951820131724353]
+    ])
+
 
     # Creating homogeneous coordinates without altering original df
     homogeneous_coords = np.c_[df[['x', 'y']].values, np.ones(len(df))]
