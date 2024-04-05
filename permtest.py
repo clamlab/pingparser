@@ -1,50 +1,90 @@
 import numpy as np
 import pandas as pd
+from pyfun.stats import select_averager
+import matplotlib.gridspec as gridspec
+from panplots import plotters
+
+def insert_xy(input_string):
+    """
+    For input string e.g. abc_$_def, return dict
+    {'x': 'abc_x_def',
+     'y': 'abc_y_def'}
+    """
+    xy_string = {}
+    for coord in ['x', 'y']:
+        xy_string[coord] = input_string.replace('$', coord)
+    return xy_string
+
+
 
 class poke_permuter():
     """
     permutation testing for nose pokes to cue position on stick
     """
    
-    def __init__(self, df, target_size):
+    def __init__(self, df, averager_type, xy_col_names, date_col='date'):
+        """
+        :param xy_col_names: dict with 'poke', 'ref', 'target' as keys,
+                          and single string value with a "$" placeholder
+
+        :param averager_type: averaging function to apply to errors. Either 'median' or 'mean'
+        """
+
         df = df.copy()
-        
+        self.date_col = date_col #column name for shuffling by date
+
+
         #drop these to avoid confusion
         #these are CueRel defined at run time, specified to other coordinates
-        df = df.drop(['CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y'], axis=1)
+        '''
+        try:
+            df = df.drop(['CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y'], axis=1)
+        except KeyError:
+            pass
+        '''
+
+        self.averager = select_averager(averager_type)
+
         self.df = df
         
-        #default column names
-        self.rel_poke = {'x': 'Welzl_x_rel', 'y': 'Welzl_y_rel'}
-        self.poke     = {'x': 'Welzl_x_bs',  'y': 'Welzl_y_bs'}
-        self.target   = {'x': 'Cue2_x',      'y': 'Cue2_y'}
-        self.rel_target = {'x': 'Cue_x_rel', 'y': 'Cue_y_rel'}
-        self.ref      = {'x': 'stick2_x',    'y': 'stick2_y'}
-        
-        self.rel_poke_shuf = {'x':'Welzl_x_rel_shuf', 'y':'Welzl_y_rel_shuf'}
-        self.poke_shuf     = {'x':'Welzl_x_shuf',     'y':'Welzl_y_shuf'}           
-        
-        self.target_size = target_size
+        # === define column names to look for ===
+        self.poke   = insert_xy(xy_col_names['poke'])
+        self.ref    = insert_xy(xy_col_names['ref'])
+        self.target = insert_xy(xy_col_names['target'])
+
+        # === define column names to create ===
+        self.rel_poke = insert_xy('poke_$_rel')
+        self.rel_target = insert_xy('target_$_rel')
+        self.rel_poke_shuf = insert_xy('poke_$_rel_shuf')
+
+        # check that new column names don't clash with existing columns
+        for c_group in [self.rel_poke, self.rel_target, self.rel_poke_shuf]:
+            for c in c_group.values():
+                if c in self.df.columns:
+                    raise ValueError('Error! Column name ' + c + ' already exists!')
+
 
         self.update()
 
+
+
     def update(self):
         df = self.df
-        #compute coordinates relative to reference
-        self.calc_rel2ref(df, self.poke,   self.rel_poke)
-        self.calc_rel2ref(df, self.target, self.rel_target)
-
+        # === compute coordinates relative to reference ===
+        # these are stored in df to debug / compare within original df,
+        # but the shuffle computations are performed on np matrices (below)
+        self.calc_rel2ref(df, old_labels = self.poke,   new_labels = self.rel_poke)
+        self.calc_rel2ref(df, old_labels = self.target, new_labels = self.rel_target)
 
         #sanity checks
         self.check_nan(df)
         self.check_dates(df)
 
         self.df = df
-
         self.grab_date_info()
 
-        #get numpy matrices (faster compute?)
-        self.rel_poke_xy = df[[self.rel_poke['x'], self.rel_poke['y']]].to_numpy()
+        #get numpy matrices (faster compute on matrices instead of dfs)
+        self.rel_poke_xy = df[[  self.rel_poke['x'],   self.rel_poke['y']]].to_numpy()
         self.rel_tgt_xy =  df[[self.rel_target['x'], self.rel_target['y']]].to_numpy()
         self.rel_poke_xy_shuf = self.rel_poke_xy.copy() #to shuffle later
         self.n = len(self.rel_poke_xy)
@@ -66,7 +106,7 @@ class poke_permuter():
             raise ValueError('ERROR! Some NaNs detected. Clean up your df')
 
     def check_dates(self, df):
-        if df['date'].is_monotonic_increasing is not True:
+        if df[self.date_col].is_monotonic_increasing is not True:
             raise ValueError('ERROR! Dates should be monotonically increasing.')
 
     def check_insess_shuffles(self, df=None):
@@ -86,7 +126,7 @@ class poke_permuter():
 
         bools_all = {}
 
-        for date, group in df.groupby('date'):
+        for date, group in df.groupby(self.date_col):
             bools = {}
             # check that mean value across session, is preserved after shuffle
             # round the means to 10th decimal place first--i've found some small rounding differences
@@ -111,21 +151,29 @@ class poke_permuter():
 
         return bools_all
 
-    def calc_dists(self, A, B):
-        #calculate pair-wise euclidean distances
+    def calc_dists(self, A, B, method='euclid'):
+        #calculate pair-wise distances, either euclid, or only in x or y direction
         #A & B are n x 2 matrices, which are n rows of x,y entries
-        
-        return np.linalg.norm(A - B, axis=1)
+
+        if method=='euclid':
+            return np.linalg.norm(A - B, axis=1)
+        elif method=='x':
+            return np.abs(A[:,0]-B[:,0])
+        elif method=='y':
+            return np.abs(A[:,1]-B[:,1])
+        else:
+            raise ValueError('Invalid distance method ' + str(method))
 
     def grab_date_info(self):
         # for each session date, grab the row indices, and n
-        # this will be computed once, and quickly applied for each within-session shuffle
+        # this will be computed once, and quickly applied (only) for within-session shuffles
+        # where within-sess shuffle will just scramble the order of old_ids to form new_ids
 
-        unique_dates = np.unique(self.df['date'])
+        unique_dates = np.unique(self.df[self.date_col])
         date_info = {}
         for date in unique_dates:
-            # Find row indices (note: iloc, not loc)
-            date_indices = np.where(self.df['date'] == date)[0]
+            # Find row indices (note: iloc, not loc), to use for shuffling in shufonce_bysess()
+            date_indices = np.where(self.df[self.date_col] == date)[0]
 
             date_info[date] = {'old_ids': date_indices.copy(),
                                'new_ids': date_indices.copy(),
@@ -133,12 +181,16 @@ class poke_permuter():
 
         self.date_info = date_info
 
-    def grab_err(self):
-        err = np.array(self.df['RespError_cuefrac'])
+    def grab_err(self, dist_method):
+
+        err = self.calc_dists(self.rel_poke_xy, self.rel_tgt_xy,  dist_method)
+
         return err
 
-    def grab_err_by_date(self):
-        err_full = np.array(self.df['RespError_cuefrac'])
+    def grab_err_by_date(self, dist_method):
+
+        err_full = self.grab_err(dist_method)
+
         err = {}  # container for actual errors by date
 
         for date, v in self.date_info.items():
@@ -146,39 +198,46 @@ class poke_permuter():
 
         return err
 
-    def permtest_coarse(self, n_shuffles):
-        err_M = np.mean(self.grab_err())
+    def permtest_coarse(self, n_shuffles, dist_method):
+        err = self.grab_err(dist_method)
+        err_M = self.averager(err)
+
         shuf_err_M = [] #container for shuffled errors
         for i in range(n_shuffles):
-            shuf_err_M.append(np.mean(self.shufonce_coarse()))
+            shuf_err = self.shufonce_coarse(dist_method)
+            shuf_err_M.append(self.averager(shuf_err))
 
         p_value = np.mean(shuf_err_M <= err_M)
 
         return p_value, shuf_err_M
 
-    def permtest_fine(self, n_shuffles):
-        err_M = np.mean(self.grab_err())
+    def permtest_fine(self, n_shuffles, dist_method):
+        err = self.grab_err(dist_method)
+        err_M = self.averager(err)
+
         shuf_err_M = [] #container for shuffled errors
         for i in range(n_shuffles):
-            shuf_err_M.append(np.mean(self.shufonce_fine()))
+            shuf_err = self.shufonce_fine(dist_method)
+            shuf_err_M.append(self.averager(shuf_err))
 
         p_value = np.mean(shuf_err_M <= err_M)
 
         return p_value, shuf_err_M
 
 
-    def permtest_bysess(self, n_shuffles):
+    def permtest_bysess(self, n_shuffles, dist_method):
 
-        err = self.grab_err_by_date()
-        err_M = {k: np.mean(v) for k, v in err.items()}
+        err = self.grab_err_by_date(dist_method)
+        err_M = {k: self.averager(v) for k, v in err.items()}
 
         shuf_err_M = {k: [] for k in err.keys()}  #container for shuffled errors
 
         for i in range(n_shuffles):
-            shuf_err = self.shufonce_bysess()
+            shuf_err = self.shufonce_bysess(dist_method)
 
             for date, this_shuf_err in shuf_err.items():
-                shuf_err_M[date].append(np.mean(this_shuf_err))
+                this_shuf_err_M = self.averager(this_shuf_err)
+                shuf_err_M[date].append(this_shuf_err_M)
 
         # calculate p-values
         p_value = {}
@@ -188,23 +247,24 @@ class poke_permuter():
         return p_value, shuf_err_M
 
 
-    def shufonce_coarse(self):
+    def shufonce_coarse(self ,dist_method):
         #shuffle entire dataset, across sessions, and calculate error
         shuffle_indices = np.random.permutation(self.n)
         self.rel_poke_xy_shuf = self.rel_poke_xy[shuffle_indices]
 
-        shuf_err = self.calc_dists(self.rel_poke_xy_shuf, self.rel_tgt_xy) / self.target_size
+        shuf_err = self.calc_dists(self.rel_poke_xy_shuf, self.rel_tgt_xy, dist_method)
 
         return shuf_err
 
-    def shufonce_fine(self):
+    def shufonce_fine(self, dist_method):
         #shuffle entire dataset, but per-sessions, and calculate error
         self.shuffle_by_sess()
-        shuf_err = self.calc_dists(self.rel_poke_xy_shuf, self.rel_tgt_xy) / self.target_size
+        shuf_err = self.calc_dists(self.rel_poke_xy_shuf, self.rel_tgt_xy, dist_method)
 
         return shuf_err
 
-    def shufonce_bysess(self):
+    def shufonce_bysess(self, dist_method):
+        # shuffle entire dataset, but per-sessions, and calculate error per session
         self.shuffle_by_sess()
 
         shuf_err = {}
@@ -214,53 +274,52 @@ class poke_permuter():
             A =       self.rel_tgt_xy[v['old_ids'], :]
             B = self.rel_poke_xy_shuf[v['old_ids'], :]
 
-            shuf_err[date] = self.calc_dists(A, B) /  self.target_size
+            shuf_err[date] = self.calc_dists(A, B, dist_method)
 
         return shuf_err
 
-    def shuffle_by_sess(self, df=None):
-        if df is None:
-            df=self.df
-        #shuffle rel pokes, but perform separate shuffle per date
+    def shuffle_by_sess(self):
+        #shuffle by sess without calculating error
+
+        df = self.df
+
         for v in self.date_info.values():
             np.random.shuffle(v['new_ids'])
             self.rel_poke_xy_shuf[v['old_ids'], :] = self.rel_poke_xy[v['new_ids'], :]
 
 class sim_permuter(poke_permuter):
-    def __init__(self, ntrials=100, datechunk_M=20, datechunk_SD=10):
-        # create simulated data
+    def __init__(self, averager_type, ntrials=100, datechunk_M=20, datechunk_SD=10):
 
-        self.target_size = 0.18
-        sim = {'Welzl_x_bs': np.random.uniform(low=-1,high=1,size=ntrials),
-               'Welzl_y_bs': np.random.uniform(low=-1,high=1,size=ntrials),
-               'Cue2_x': np.random.uniform(-1, 1, ntrials),
-               'stick2_x': [0] * ntrials}
+
+        xy_col_names = {'poke':   'Welzl_$_bs',
+                        'ref' :   'stick2_$',
+                        'target': 'Cue2_$' }
+        date_col = 'date'
+
+        # === create container for simulated data ===
+        sim = {'Welzl_x_bs': np.zeros(ntrials), #poke
+               'Welzl_y_bs': np.zeros(ntrials),
+               'Cue2_x'    : np.zeros(ntrials), #target
+               'Cue2_y'    : np.zeros(ntrials),
+               'stick2_x'  : np.zeros(ntrials), #ref
+               'stick2_y'  : np.zeros(ntrials)}
 
         sim_df = pd.DataFrame(sim)
 
-        for c in ['Welzl_y_bs', 'Cue2_y', 'stick2_y', 'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y']:
-            sim_df[c] = 0
-
-        #sim_df['Welzl_x_bs'] = sim_df['Cue2_x'] + np.random.normal(loc=0.0, scale=1,
-        #                                                           size=ntrials)
-
-        #sim_df['Welzl_y_bs'] = sim_df['Cue2_y'] + np.random.normal(loc=0.0, scale=1,
-        #                                                           size=ntrials)
 
 
-        # sim_df['Welzl_x_bs']=np.random.normal(loc=0.0,scale=0.01,size=ntrials)
-        # sim_df.loc[sim_df['Welzl_x_bs']>1,['Welzl_x_bs']]=1
-        # sim_df.loc[sim_df['Welzl_x_bs']<-1,['Welzl_x_bs']]=-1
 
         sim_df = self.generate_dates(sim_df, M=datechunk_M, SD=datechunk_SD)
-        super().__init__(sim_df, self.target_size)
+
+
+        super().__init__(sim_df, averager_type, xy_col_names, date_col)
 
         self.update_sim()
 
     def update_sim(self):
         A = np.array(self.df[['Welzl_x_bs', 'Welzl_y_bs']])
         B = np.array(self.df[['Cue2_x', 'Cue2_y']])
-        self.df['RespError_cuefrac'] = np.linalg.norm(A - B, axis=1) / self.target_size
+        self.df['RespError_cuefrac'] = np.linalg.norm(A - B, axis=1) #not used in shuffling, just for sanity check
 
         super().update()
 
@@ -286,7 +345,6 @@ class sim_permuter(poke_permuter):
         chunk_id_to_date = {chunk_id: date for chunk_id, date in zip(range(len(chunk_sizes)), dates)}
         df['date'] = df['chunk_id'].map(chunk_id_to_date)
 
-
         # Drop the temporary chunk ID column
         df.drop('chunk_id', axis=1, inplace=True)
         df['date'] = df['date'].astype('str')
@@ -294,4 +352,84 @@ class sim_permuter(poke_permuter):
         return df
 
 
+def plot_shuffle_battery(fig, plot_title, permer, n_shuffles, date_labels=False):
+    """
+    example usage:
+    plot a battery of shuffle tests
+    """
 
+
+    # === set up subplots layout ===
+    gs = gridspec.GridSpec(2, 3, height_ratios=[1, 1])
+    fig.subplots_adjust(hspace=0.25)
+
+    fig.text(0.5, 0.95, plot_title, ha='center', va='top')
+    axes = list(range(4))
+
+    axes[0] = (fig.add_subplot(gs[0, :]))  # First row, spanning all columns
+
+    for i in range(1, 4):
+        axes[i] = fig.add_subplot(gs[1, i - 1])  # Second row, first column
+
+    for ax in axes:
+        ax.spines[['right', 'top']].set_visible(False)
+
+    ax = axes[0]
+    sess_pvals_all = {}
+    for m in ['euclid', 'x', 'y']:
+        sess_pvals, null_dist = permer.permtest_bysess(n_shuffles, dist_method=m)
+        ax.plot(sess_pvals.keys(),sess_pvals.values(), label=m)
+
+        sess_pvals_all[m] = sess_pvals
+
+    if date_labels:
+        ax.tick_params(axis='x', rotation=45)
+    else:
+        ax.set_xticklabels([])
+
+    ax.set_xlabel('Session')
+    ax.set_ylabel('p-value')
+
+    ax.axhline(0.05, color='k', linewidth=1, linestyle='--')
+    legend = ax.legend(loc=(.9,.9))
+    legend.get_frame().set_alpha(0.2)
+
+    p = {}
+    for m in ['euclid', 'x', 'y']:
+        p[m], null_dist = permer.permtest_fine(n_shuffles, dist_method=m)
+        p[m] = str(p[m].round(2))
+
+    txtbox = 'Fine' + '\nxy: ' + p['euclid'] + '\n x: ' + p['x'] + '\n y: ' + p['y']
+
+    ax.text(0.05, 0.9, txtbox, fontsize=10, transform=ax.transAxes,
+            bbox={'facecolor': 'white', 'alpha': 0.3, 'pad': 5})
+
+    p = {}
+    for m in ['euclid', 'x', 'y']:
+        p[m], null_dist = permer.permtest_coarse(n_shuffles, dist_method=m)
+        p[m] = str(p[m].round(2))
+
+    txtbox = 'Coarse' + '\nxy: ' + p['euclid'] + '\n x: ' + p['x'] + '\n y: ' + p['y']
+    ax.text(0.1, 0.9, txtbox, fontsize=10, transform=ax.transAxes,
+            bbox={'facecolor': 'white', 'alpha': 0.3, 'pad': 5})
+
+    # === histograms for session p values ===
+
+    for i, m in enumerate(['euclid', 'x', 'y']):
+        ax = axes[i + 1]
+
+        pvals = np.array(list(sess_pvals_all[m].values()))
+
+        ax.hist(pvals, bins=100);
+
+        pvals = np.array(list(sess_pvals_all[m].values()))
+        sig_frac = np.mean(pvals < 0.05) * 100  # fraction of data that are p < .05
+        txt = str(sig_frac.round(3)) + '% with p < .05'
+
+        ax.text(0.7, 0.1, txt, fontsize=12, transform=ax.transAxes,
+                bbox={'facecolor': 'yellow', 'alpha': 0.5, 'pad': 10})
+
+        ax.set_title(m)
+        if i == 1:
+            ax.set_xlabel('p_value')
+        ax.axvline(0.05, color='k', linewidth=1, linestyle='--')
