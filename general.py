@@ -9,6 +9,36 @@ BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
 import pandas as pd, numpy as np
 import pyfun.bamboo as boo
+import os
+import glob
+import importlib
+
+
+def amend_processed(amendments_directory, expt):
+    """
+    applies corrections to processed dataframes
+    assumes that processed dfs are expt.anim.big_df
+    """
+
+    search_str = os.path.join(amendments_directory, '*.py')
+    amendment_scripts = sorted(glob.glob(search_str))
+
+    n = 0
+    for script_path in amendment_scripts:
+        module_name = os.path.splitext(os.path.basename(script_path))[0]
+        spec = importlib.util.spec_from_file_location(module_name, script_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        if hasattr(module, 'amend'):
+            expt = module.amend(expt)
+            n+=1
+        else:
+            print(f"No amend function in {module_name}")
+
+    print(n, 'corrections made.')
+    return expt
+
 
 
 def read_raw(csv_file, delimiter=';', colnames=["TrialNum", "Subject", "Value", "Timestamp"]):
