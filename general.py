@@ -84,7 +84,7 @@ def sess_summary(df_sess_raw, sess_name, expt_module):
     # === pre-process ===
     if pre_processor is not None:
         df_sess_raw = pre_processor(df_sess_raw)
-    #df_sess_raw = boo.slice(df_sess_raw, {'TrialNum': [0]}, '-') #remove trial 0
+    #df_sess_raw = boo.slice(df_sess_raw, {'TrialNum': [0]}, '-') #remove trial 0. May need to preserve for older csvs which still require running valuators
 
     # === extract values trial by trial and compile into a list ===
     sess_extracts = []
@@ -122,8 +122,12 @@ def get_trial_param(df_trial, param, dtype, single):
         return None
     elif len(matches) > 0:
         #=== type conversion ===
+        #if no conversion, it remains as string
         if dtype == 'float':
             matches = [float(s) for s in matches]
+        elif dtype == 'int':
+            matches = [int(s) for s in matches]
+
 
         if len(matches) == 1:
             return matches[0]
