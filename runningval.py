@@ -68,7 +68,19 @@ def find_recent(df_sess_raw, subj_name, trial_num):
 
 
 def get(df_raw, subj_names, event_anchor='FixationCompleted', debug=False):
+
     fixmod_idx = get_trial_event_indices(df_raw, event_anchor)
+
+
+    # handle trials where event anchor wasn't found (e.g. no fixation completed)
+    # for these we just set the event anchor to be the final row in the trial
+    trial_nums = df_raw['TrialNum'].unique()
+    trials_without_eventanchor = list(set(trial_nums.tolist()) - set(fixmod_idx.keys()))
+    df_noevent = boo.slice(df_raw, {'TrialNum': trials_without_eventanchor})
+
+    for trial_num, df_trial in df_noevent.groupby('TrialNum'):
+        fixmod_idx[trial_num] = int(df_trial.index[-1])
+
 
     vals = {}
     param_rows = {}
