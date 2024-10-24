@@ -1,4 +1,8 @@
-#TODO: harmonize with lorena tracking. the two are identical except for the marker indicating counted touch
+#TODO: harmonize with lorena tracking_top. the two are identical except for the marker indicating counted touch
+
+
+#this is in bonsai coordinates
+
 
 BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
@@ -8,7 +12,7 @@ import pyfun.bamboo as boo, pyfun.timestrings as timestr
 
 VERSION = "touch_v01"
 DATE = "11.03.23"
-ORIGINAL_NAME = "tracking/touch.py"
+ORIGINAL_NAME = "tracking_top/touch_v01.py"
 
 
 def resp_xy(fn, sess_name, tracker_name):
@@ -80,7 +84,7 @@ def resp_xy(fn, sess_name, tracker_name):
         # convert timestamps into time relative to first counted touch
 
         touch_rows['TrialNum'] = TrialNum
-        touch_df = touch_df.append(touch_rows)
+        touch_df = pd.concat([touch_df, touch_rows])
 
     touch_df['sess'] = sess_name
 

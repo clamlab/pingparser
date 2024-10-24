@@ -52,9 +52,20 @@ def get_subsess_paths(animal_name, animal_root, remove_prefix='results_', verbos
 
     animal_id/datetime/results_datetime2/*.csv
 
+    #in bonsai there is a new session folder (datetime) created when bonsai is first launched
+    #each session has a results subfolder (results_datetime2), and stopping and re-starting
+    #bonsai creates multiple results subfolder within that same session folder.
+
     :param animal_root: path to data folder containing all sessions belonging to one animal
     :return:
     """
+
+    #some results somefolders have earlier timestamps than the parent session folder
+    #this is an error resulting from results folders created in the main code directory
+    #e.g. during debugging but not deleted
+
+    timestamp_errors = [] #store these timestamp mismatches
+
 
     subsess_paths = defaultdict(AddOnlyDict)
 
@@ -71,8 +82,13 @@ def get_subsess_paths(animal_name, animal_root, remove_prefix='results_', verbos
 
             # ===check that timestamp of inner subfolder is later than timestamp of outer subfolder
             if subfolder_1_date > subfolder_2_date:
-                raise ValueError(
-                    "Error! File {} \noccurs earlier than folder {} ".format(subfolder_2_name, subfolder_1_name))
+                # reformat full path for simplicity
+                path = os.path.normpath(subfolder_1_path)
+                parts = path.split(os.sep)[-2:]
+
+                timestamp_errors.append([os.path.join(parts[-2], parts[-1]), subfolder_2_name])
+                continue
+
 
             file_searchstr = os.path.join(subfolder_2_path, '*.csv')
             filenames = [os.path.basename(f) for f in glob.glob(file_searchstr)]
@@ -81,7 +97,7 @@ def get_subsess_paths(animal_name, animal_root, remove_prefix='results_', verbos
                 file_type = fn.split('.')[0]
                 subsess_paths[subfolder_2_name.replace(remove_prefix, '')][file_type] = os.path.join(subfolder_2_path, fn)
 
-    return subsess_paths
+    return subsess_paths, timestamp_errors
 
 
 def get_subsess_paths_old(animal_name, animal_root, verbose=False):

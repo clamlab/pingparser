@@ -9,7 +9,7 @@ import pingparser.runningval as runningval
 
 VERSION = "lorena_v01"
 DATE = "10.18.23"
-ORIGINAL_NAME = "event_extractors/lorena.py"
+ORIGINAL_NAME = "events/lorena_v01.py"
 
 
 COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',

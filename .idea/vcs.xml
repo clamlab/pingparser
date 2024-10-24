@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="VcsDirectoryMappings">
-    <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../Behavior-Protocols" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../DailyDataView" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../Kalman-and-Bayesian-Filters-in-Python" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../ephys" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../ephys/kilosort scripts/npy-matlab" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../open-ephys-python-tools" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../pSWM" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../panplots" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../pyfun" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../rigs-dash" vcs="Git" />
   </component>
 </project>

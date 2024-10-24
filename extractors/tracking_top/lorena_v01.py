@@ -1,4 +1,4 @@
-#TODO: harmonize this with touch.py
+#TODO: harmonize this with touch_v01.py
 
 BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
 
@@ -8,15 +8,15 @@ import pyfun.bamboo as boo, pyfun.timestrings as timestr
 
 VERSION = "lorena_v01"
 DATE = "10.18.23"
-ORIGINAL_NAME = "tracking/lorena.py"
+ORIGINAL_NAME = "tracking_top/lorena_v01.py"
 
 
 def resp_xy(fn, sess_name, tracker_name):
     """
-    process response tracking for a single session csv
+    process response tracking_top for a single session csv
     """
 
-    xy_raw = genparse.read_raw(fn) #tracking xy file e.g. snout_xy
+    xy_raw = genparse.read_raw(fn) #tracking_top xy file e.g. snout_xy
 
     # ==== extract basic response markers ===
     # 1. start of response period to consider ('RespMod_on'),

@@ -1,0 +1,71 @@
+2024-10-23 11:11:03,516 - ERROR - Error during processing: name 'importlib' is not defined
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 164, in main
+    modules = load_modules(metadata_fd, config['bonsai_exp'], config['processing_version'])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 42, in load_modules
+    m = importlib.import_module(m_name)
+        ^^^^^^^^^
+NameError: name 'importlib' is not defined. Did you forget to import 'importlib'
+2024-10-23 11:30:37,708 - ERROR - Error during processing: name 'importlib' is not defined
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 164, in main
+    modules = load_modules(metadata_fd, config['bonsai_exp'], config['processing_version'])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 42, in load_modules
+    m = importlib.import_module(m_name)
+        ^^^^^^^^^
+NameError: name 'importlib' is not defined. Did you forget to import 'importlib'
+2024-10-23 11:30:46,281 - ERROR - Error during processing: name 'importlib' is not defined
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 164, in main
+    modules = load_modules(metadata_fd, config['bonsai_exp'], config['processing_version'])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 42, in load_modules
+    m = importlib.import_module(m_name)
+        ^^^^^^^^^
+NameError: name 'importlib' is not defined. Did you forget to import 'importlib'
+2024-10-23 11:41:30,894 - ERROR - Error during processing: name 'importlib' is not defined
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 155, in main
+    modules = load_modules(config)
+              ^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 43, in load_modules
+    extractors[e_name] =  importlib.import_module(module_path)
+                          ^^^^^^^^^
+NameError: name 'importlib' is not defined. Did you forget to import 'importlib'
+2024-10-23 11:41:55,681 - ERROR - Error during processing: name 'importlib' is not defined
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 155, in main
+    modules = load_modules(config)
+              ^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 43, in load_modules
+    extractors[e_name] =  importlib.import_module(module_path)
+                          ^^^^^^^^^
+NameError: name 'importlib' is not defined. Did you forget to import 'importlib'
+2024-10-23 11:42:02,614 - ERROR - Error during processing: name 'importlib' is not defined
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 155, in main
+    modules = load_modules(config)
+              ^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 43, in load_modules
+    extractors[e_name] =  importlib.import_module(module_path)
+                          ^^^^^^^^^
+NameError: name 'importlib' is not defined. Did you forget to import 'importlib'
+2024-10-23 11:42:49,496 - ERROR - Error during processing: the 'package' argument is required to perform a relative import for '../extractors\\events\\touch_v05.py'
+Traceback (most recent call last):
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 155, in main
+    modules = load_modules(config)
+              ^^^^^^^^^^^^^^^^^^^^
+  File "D:\clamlab\pingparser\dailyautoproc\autoproc.py", line 43, in load_modules
+    extractors[e_name] =  importlib.import_module(module_path)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Akramilab\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py", line 84, in import_module
+    raise TypeError("the 'package' argument is required to perform a "
+TypeError: the 'package' argument is required to perform a relative import for '../extractors\\events\\touch_v05.py'
+2024-10-23 12:01:40,342 - INFO - Imported events, version: touch_v05 from: pingparser.extractors.events.touch_v05
+2024-10-23 12:01:40,347 - INFO - Imported tracking_top, version: touch_v01 from: pingparser.extractors.tracking_top.touch_v01
+2024-10-23 12:05:43,731 - INFO - Imported events, version: touch_v05 from: pingparser.extractors.events.touch_v05
+2024-10-23 12:05:43,734 - INFO - Imported tracking_top, version: touch_v01 from: pingparser.extractors.tracking_top.touch_v01
+2024-10-23 12:08:02,756 - ERROR - ModuleNotFoundError: Failed to import pingparser.extractors.events.touch_v05.dsd. Error: No module named 'pingparser.extractors.events.touch_v05.dsd'; 'pingparser.extractors.events.touch_v05' is not a package
+2024-10-23 12:08:02,758 - ERROR - ModuleNotFoundError: Failed to import pingparser.extractors.tracking_top.touch_v01.dsd. Error: No module named 'pingparser.extractors.tracking_top.touch_v01.dsd'; 'pingparser.extractors.tracking_top.touch_v01' is not a package

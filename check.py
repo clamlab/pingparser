@@ -74,7 +74,7 @@ def random_trial(anim, running_subj, mode='big'):
 
 def new_df_lens(expt):
     all_passed = True
-
+    err_msgs = []
     for anim_name, anim in expt.anim.items():
         new_lens = len(anim.new_df)
         sess_lens = np.sum([len(df) for df in anim.sess.values()])
@@ -83,10 +83,14 @@ def new_df_lens(expt):
 
         if passed == False:
             all_passed = False
-            print('ERROR: ', anim_name, 'big:', new_lens, ', sess:', sess_lens, ', subsess:', subsess_lens)
+            err_msg = f"{anim_name}, big: {new_lens}, sess: {sess_lens}, subsess: {subsess_lens}"
+            print(err_msg)
+            err_msgs.append(err_msg)
 
     if all_passed:
         print('Overall length checks passed.')
+
+    return err_msgs
 
 def subsess_lens(expt):
     # ===check that lengths of subsess_dfs are preserved
@@ -95,6 +99,9 @@ def subsess_lens(expt):
     #input: expt
 
     any_errors = False
+
+    err_msgs = []
+
     for anim_name, anim in expt.anim.items():
 
         for sess_name, sess_df in anim.sess.items():
@@ -119,8 +126,12 @@ def subsess_lens(expt):
                     n_in_merged = 0
 
                 if n_in_merged!=n_actual:
-                    print('ERROR:',anim_name, subsess_name, 'is', n_actual, 'vs', n_in_merged)
+                    err_msg = f"{anim_name}, {subsess_name} is {n_actual} vs {n_in_merged}"
+                    print(err_msg)
+                    err_msgs.append(err_msg)
                     any_errors = True
 
     if any_errors==False:
         print('Subsess length checks passed.')
+
+    return err_msgs

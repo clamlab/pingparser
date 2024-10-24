@@ -1,0 +1,2 @@
+2024-10-22 23:08:00,749 - ERROR - Error checking new data: [Errno 2] No such file or directory: '/path/to/processed_log.txt'
+2024-10-22 23:08:00,750 - INFO - No new files to process.

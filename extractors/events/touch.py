@@ -9,7 +9,7 @@ import pingparser.runningval as runningval
 
 VERSION = "touch_v01"
 DATE = "11.03.23"
-ORIGINAL_NAME = "event_extractors/touch.py"
+ORIGINAL_NAME = "events/touch_v01.py"
 
 
 

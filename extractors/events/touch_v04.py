@@ -7,9 +7,9 @@ import pingparser.general as genparse
 import pyfun.bamboo as boo
 import pingparser.runningval as runningval
 
-VERSION = "touch_v03"
-DATE = "05.17.24"
-ORIGINAL_NAME = "event_extractors/touch_v03.py"
+VERSION = "touch_v04"
+DATE = "10.10.24"
+ORIGINAL_NAME = "events/touch_v04.py"
 
 
 

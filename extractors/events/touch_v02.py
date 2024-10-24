@@ -2,44 +2,32 @@
 event parser for pSWM touchscreen setup
 """
 
-import sys
 import pandas as pd, numpy as np
 import pingparser.general as genparse
 import pyfun.bamboo as boo
-import pyfun.timestrings as tstr
-
 import pingparser.runningval as runningval
 
-VERSION = "touch_v05"
-DATE = "10.22.24"
-ORIGINAL_NAME = "event_extractors/touch_v05.py"
+VERSION = "touch_v02"
+DATE = "24.04.24"
+ORIGINAL_NAME = "events/touch_v02.py"
 
-
-
-#three cases:
-#10.16 -- is_warmup variable introduced (but unused). Can ignore
-#10.22 -- warmup_state: integer which counts number of warmup processes occurring for a given trial.
-#         0 = not warm up trial.
-#         Additionally, trial params pushing has been cleaned up so that key trial params are only pushed at trial start
-#         through event ping. Running valuators become unnecessary (just grab the value within trial). However, we keep
-#         them for backward compatibility in this version of event extractor.
 
 
 COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
-            'Cue_D', 'CueMove',
+            'Cue_D', 'CueGoneDist', 'CueMove',
             'RespPause', 'RespBox_type',
             'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y',
             'Cue1_x', 'Cue1_y', 'Cue2_x', 'Cue2_y',
             'anchor1_x', 'anchor1_y', 'anchor2_x', 'anchor2_y',
             'Welzl_x', 'Welzl_y', 'Welzl_D',
             'WMDelay', 'WMTrial',
-            'optoTrial', 'TrialType', 'TrialDur', 'FixationBreaks', 'warmup_state']
+            'optoTrial', 'TrialType']
 
 #list of dictionary for slicing away raw df (with bamboo.slice, polarity '-), in pre_processor()
 RAW_TO_DELETE = []
 
 #list of running values to grab using runningval
-RUNNING_VALS = ['Cue_D', 'FixationDur','TrialType','RespPause','WMDelay']
+RUNNING_VALS = ['Cue_D', 'CueGoneDist','FixationDur','TrialType','RespPause','WMDelay']
 
 
 def pre_processor(df_sess_raw):
@@ -62,16 +50,6 @@ def post_processor(df):
     for subj in ['WMDelay', 'Cue_D']:
         df[subj] = df[subj].astype('float')
 
-    #4. remove trial 0
-    df = boo.slice(df, {'TrialNum':[0]}, '-')
-
-    #5. set tiny values of WMDelay to be 0
-    # the cause of this was related to C# and floating point values in the script WM_FixationWarmUp
-    # (in use around Oct 16-22)
-    epsilon = 1e-10
-    df_sess['WMDelay'].apply(lambda x: 0 if abs(x) <= epsilon else x)
-
-
     #set non-WM trials types WMDelay to nan
     nonWMs = boo.slice(df, {'TrialType': ['1_PortFix', '2_PortFixCue', '3_WMDist']})
     df.loc[nonWMs.index, 'WMDelay'] = np.nan
@@ -85,65 +63,32 @@ def running_valuator(df_sess_raw):
     vals_all = runningval.get(df_sess_raw, RUNNING_VALS, debug=False)
     return vals_all
 
-def calc_trial_dur(df_trial, start_event='ModEvent', end_event='Trial_ended'):
-    #calculate start and end times of trial
-    start_end = []
-    for event in [start_event, end_event]:
-        try:
-            timestr = boo.slice(df_trial, {'Subject': [event]})['Timestamp'].iloc[0]
-                    #take the first ModEvent and first Trial_ended (but there should only be one!)
-            start_end.append(pd.to_datetime(timestr))
-        except:
-            start_end.append(None)
-
-    trial_dur = tstr.calc_dt(start_end[1], start_end[0],'secs')
-    return trial_dur
 
 
-row_holder_template = pd.DataFrame({'val': None}, index=COLNAMES)
 def trial_summarizer(df_trial):
     """
     df_trial: df containing all events restricted to a single trial.
     return crucial trial info as a single row
     crucial trial info differs across experiments
     """
-    row_holder = row_holder_template.copy() #deep copy by default
 
-    row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
-
-    # calculate trial duration
-    trial_dur = calc_trial_dur(df_trial, 'ModEvent', 'Trial_ended')
-    row_holder.loc['TrialDur', 'val'] = trial_dur
-
-    # count number of fixation breakings
-    n_fix_breaks = len(boo.slice(df_trial, {'Value': ['FixationInterrupted']}))
-    row_holder.loc['FixationBreaks', 'val'] = n_fix_breaks
-
-    # find fixation completed event
     fixated = boo.slice(df_trial, {'Value': ['FixationCompleted']}, '+')  # index where InTimerCompleted
 
-    if len(fixated) == 0:
-        #no fixation completed
-        fixated_row = df_trial.index[-1] #just set to last row in trial
-    else:
-        # save row number, for finding parameters centered around fixation complete
-        # e.g. cue position, while discarding stimulus parameters occurring for broken fixations
-        fixated_row = fixated.index[0]
+    if len(fixated) == 0:  # TODO account for trials where fixation did not complete
+        return None
+
+    fixated_row = fixated.index[0]
 
 
+    row_holder = pd.DataFrame({'val': None}, index=COLNAMES)
 
-
-
+    row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
     for param in ['RespError_cuefrac']:
         row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='strict')
 
     for param in ['Welzl_D']:
         row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='last')
-
-    for param in ['warmup_state']:
-        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='int', single='strict')
-
 
     #extract xy subjects that are not prepost (below)
     for xy_param in ['Welzl']:
@@ -177,15 +122,3 @@ def trial_summarizer(df_trial):
             row_holder.loc[k, 'val'] = v
 
     return row_holder
-
-# Example usage for testing
-if __name__ == "__main__":
-    fn = "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_10_20-10_40/results_2024-10-20T10_40_14/Events.csv"
-    df_sess_raw = genparse.read_raw(fn)
-    subsess_name = '2024-10-20'
-    this_module = sys.modules[__name__]
-
-    df_sess = genparse.sess_summary(df_sess_raw, subsess_name, this_module)
-
-    df_sess
-
