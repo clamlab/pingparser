@@ -10,9 +10,9 @@ import pyfun.timestrings as tstr
 
 import pingparser.runningval as runningval
 
-VERSION = "touch_v05"
-DATE = "10.22.24"
-ORIGINAL_NAME = "events/touch_v05.py"
+VERSION = "touch_v06"
+DATE = "10.31.24"
+ORIGINAL_NAME = "events/touch_v06.py"
 
 
 
@@ -24,6 +24,11 @@ ORIGINAL_NAME = "events/touch_v05.py"
 #         through event ping. Running valuators become unnecessary (just grab the value within trial). However, we keep
 #         them for backward compatibility in this version of event extractor.
 
+#10/25, 28, 29:
+#push trial params never completes  because optoTrial not received, leading to multiple instances of same variable pushed
+#(number of instances increments by one per trial i.e. on trial 2, 2 pushes, trial 100, 100 pushes :(
+
+
 
 COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
             'Cue_D', 'CueMove',
@@ -34,7 +39,8 @@ COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
             'ITI',
             'Welzl_x', 'Welzl_y', 'Welzl_D',
             'WMDelay', 'WMTrial',
-            'optoTrial', 'TrialType', 'TrialDur', 'FixationBreaks', 'warmup_state']
+            'optoTrial', 'TrialType', 'TrialDur', 'FixationBreaks', 'warmup_state',
+            'FixationGraceDur']
 
 #list of dictionary for slicing away raw df (with bamboo.slice, polarity '-), in pre_processor()
 RAW_TO_DELETE = []
@@ -142,11 +148,11 @@ def trial_summarizer(df_trial):
     for param in ['RespError_cuefrac']:
         row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='strict')
 
-    for param in ['Welzl_D']:
+    for param in ['Welzl_D', 'FixationGraceDur']:
         row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='last')
 
     for param in ['warmup_state']:
-        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='int', single='strict')
+        row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='int', single='last')
 
 
     #extract xy subjects that are not prepost (below)
