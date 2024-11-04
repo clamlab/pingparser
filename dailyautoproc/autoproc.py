@@ -308,6 +308,7 @@ def main(config_file, debug=False):
         # Merge sessions occurring on same day
         expt = merge_sessions(expt)
 
+        #need some way to deal with contingencies e.g. what if program is interrupted in any of the next 3 lines??
         #extract touch
         extract_and_save_touch(expt, extractors['Touch_xy_bs'], config)
 
@@ -330,7 +331,7 @@ if __name__ == "__main__":
     # Example usage: python autoproc.py --config configs/config_v05.yaml
 
     # Default to v05 config file for debugging purposes
-    default_config_path = 'configs/config_v05.yaml'
+    default_config_path = 'configs/config_v06.yaml'
 
     parser = argparse.ArgumentParser(description='Run auto processing with configuration.')
     parser.add_argument('--config', type=str, default=default_config_path, help='Path to the config file')
