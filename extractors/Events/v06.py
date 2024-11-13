@@ -11,9 +11,8 @@ import pyfun.timestrings as tstr
 import pingparser.runningval as runningval
 
 VERSION = "touch_v06"
-DATE = "10.31.24"
-ORIGINAL_NAME = "events/touch_v06.py"
-
+DATE    = "10.31.24"
+TYPE    = 'Events'
 
 
 #three cases:
@@ -27,7 +26,6 @@ ORIGINAL_NAME = "events/touch_v06.py"
 #10/25, 28, 29:
 #push trial params never completes  because optoTrial not received, leading to multiple instances of same variable pushed
 #(number of instances increments by one per trial i.e. on trial 2, 2 pushes, trial 100, 100 pushes :(
-
 
 
 COLNAMES = ['TrialNum', 'FixationDur', 'RespError_cuefrac',
@@ -48,8 +46,70 @@ RAW_TO_DELETE = []
 #list of running values to grab using runningval
 RUNNING_VALS = ['Cue_D', 'FixationDur','TrialType','RespPause','WMDelay']
 
+row_holder_template = pd.DataFrame({'val': None}, index=COLNAMES)
 
-def pre_processor(df_sess_raw):
+def extract(df_sess_raw, sess_name):
+    """
+    Process one session raw file and return one row per trial,
+    with columns containing per-trial variables (e.g., stimulus, animal choices).
+    """
+    if len(df_sess_raw) == 0:
+        return pd.DataFrame()
+
+    # Pre-process the raw session data
+    df_sess_raw = _pre_processor(df_sess_raw)
+
+    # === Extract values trial by trial and compile into a list ===
+    sess_extracts = []
+    for TrialNum, df_trial in df_sess_raw.groupby('TrialNum'):
+        one_trial = _trial_summarizer(df_trial)
+        if one_trial is not None:
+            sess_extracts.append(one_trial['val'].tolist())
+
+    # Convert the list of extracted trials into a DataFrame
+    df_sess = pd.DataFrame(sess_extracts, columns=COLNAMES)
+
+    if df_sess.empty:
+        return pd.DataFrame()
+
+    # === Compute running values for the entire session ===
+    running_vals = _running_valuator(df_sess_raw)
+    for subj_name, vals in running_vals.items():
+        try:
+            df_sess = boo.merge_update(df_sess, vals, subj_name, match_column='TrialNum')
+        except KeyError:
+            # If 'TrialNum' doesn't exist due to an empty DataFrame, skip this step
+            continue
+
+    # Add session identifier
+    df_sess['sess'] = sess_name
+
+    # Post-process the session data
+    df_sess = _post_processor(df_sess)
+
+    return df_sess
+
+
+
+
+
+def _calc_trial_dur(df_trial, start_event='ModEvent', end_event='Trial_ended'):
+    #calculate start and end times of trial
+    start_end = []
+    for event in [start_event, end_event]:
+        try:
+            timestr = boo.slice(df_trial, {'Subject': [event]})['Timestamp'].iloc[0]
+                    #take the first ModEvent and first Trial_ended (but there should only be one!)
+            start_end.append(pd.to_datetime(timestr))
+        except:
+            start_end.append(None)
+
+    trial_dur = tstr.calc_dt(start_end[1], start_end[0],'secs')
+    return trial_dur
+
+
+
+def _pre_processor(df_sess_raw):
     df = df_sess_raw.copy()
 
     for r in RAW_TO_DELETE:
@@ -57,7 +117,7 @@ def pre_processor(df_sess_raw):
 
     return df
 
-def post_processor(df):
+def _post_processor(df):
 
     #1. create variable for CueMove
     df['CueMove'] = (df['Cue1_x'] == df['Cue2_x']) & (df['Cue1_y'] == df['Cue2_y']) == False
@@ -87,28 +147,13 @@ def post_processor(df):
 
 
 
-def running_valuator(df_sess_raw):
+def _running_valuator(df_sess_raw):
     #extract running values (cannot be done separately using trial summarizer)
     vals_all = runningval.get(df_sess_raw, RUNNING_VALS, debug=False)
     return vals_all
 
-def calc_trial_dur(df_trial, start_event='ModEvent', end_event='Trial_ended'):
-    #calculate start and end times of trial
-    start_end = []
-    for event in [start_event, end_event]:
-        try:
-            timestr = boo.slice(df_trial, {'Subject': [event]})['Timestamp'].iloc[0]
-                    #take the first ModEvent and first Trial_ended (but there should only be one!)
-            start_end.append(pd.to_datetime(timestr))
-        except:
-            start_end.append(None)
 
-    trial_dur = tstr.calc_dt(start_end[1], start_end[0],'secs')
-    return trial_dur
-
-
-row_holder_template = pd.DataFrame({'val': None}, index=COLNAMES)
-def trial_summarizer(df_trial):
+def _trial_summarizer(df_trial):
     """
     df_trial: df containing all events restricted to a single trial.
     return crucial trial info as a single row
@@ -119,7 +164,7 @@ def trial_summarizer(df_trial):
     row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
     # calculate trial duration
-    trial_dur = calc_trial_dur(df_trial, 'ModEvent', 'Trial_ended')
+    trial_dur = _calc_trial_dur(df_trial, 'ModEvent', 'Trial_ended')
     row_holder.loc['TrialDur', 'val'] = trial_dur
 
     # count number of fixation breakings
@@ -136,8 +181,6 @@ def trial_summarizer(df_trial):
         # save row number, for finding parameters centered around fixation complete
         # e.g. cue position, while discarding stimulus parameters occurring for broken fixations
         fixated_row = fixated.index[0]
-
-
 
 
 
@@ -195,7 +238,7 @@ if __name__ == "__main__":
     subsess_name = '2024-10-20'
     this_module = sys.modules[__name__]
 
-    df_sess = genparse.sess_summary(df_sess_raw, subsess_name, this_module)
+    df_sess = genparse.events_summary(df_sess_raw, subsess_name, this_module)
 
     df_sess
 

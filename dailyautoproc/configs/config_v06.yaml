@@ -1,13 +1,13 @@
 
 # Configuration for processing version v05
 
-version: "v06"
+version: "v07"
 root_dir: "Y:/Edmund/Data/Touchscreen_pSWM/"
                 #script will find look for 
                 #/raw and /processed subfolders here
 
 overwrite: false   
-# overwrite existing processed data (in processed list)u
+# overwrite existing processed data (in processed list)
 
 animal_names:
   - "EC01"
@@ -29,8 +29,8 @@ animal_names:
 extractor_path: "../extractors"
 
 extractors:
-  events: "touch_v06"
-  Touch_xy_bs:  "touch_v01"
+  Events: "v07"
+  Touch_xy_bs:  "v02"
 
 # Cutoff date for processing sessions
 cutoff_min: 

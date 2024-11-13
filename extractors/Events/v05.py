@@ -189,7 +189,7 @@ if __name__ == "__main__":
     subsess_name = '2024-10-20'
     this_module = sys.modules[__name__]
 
-    df_sess = genparse.sess_summary(df_sess_raw, subsess_name, this_module)
+    df_sess = genparse.events_summary(df_sess_raw, subsess_name, this_module)
 
     df_sess
 

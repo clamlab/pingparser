@@ -6,6 +6,10 @@ import logging
 import yaml
 import argparse #for handling command-line args
 import importlib
+
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+
+
 from datetime import datetime
 
 import pingparser.general as genparse
@@ -20,46 +24,53 @@ def setup_config(config_file):
     with open(config_file, 'r') as f:
         config = yaml.safe_load(f)
 
-    config = setup_directories(config)
-
-    config['raw_dir'] = os.path.join(config['root_dir'], 'raw')
-
-    config['proc_list_fn'] = os.path.join(config['dirs']['metadata'], 'processed.csv')
-    #list containing already-pre-processed results files
+    config = setup_paths(config)
 
     return config
 
-def setup_directories(config):
+def setup_paths(config):
+    # TODO in theory dir creation only needs to be run first time. Unclear what is best practice for
+    # TODO checking this.
 
-    base_dir = os.path.join(config['root_dir'], 'processed', config['version'])
 
-    # === get sub_dir paths ===
-    # for extractors (e.g., events, tracking)
-    sub_dirs = {
-        f"{e_name}_dir": os.path.join(base_dir, e_name)
-        for e_name in config['extractors']
-    }
+    # === common subdirectories ===
+    config['raw_dir']    = os.path.join(config['root_dir'], 'raw')
+    config['output_dir'] = os.path.join(config['root_dir'], 'processed')
 
-    # for metadata
-    sub_dirs['metadata'] = os.path.join(base_dir, 'metadata')
-    sub_dirs['logs']     = os.path.join(base_dir, 'metadata/logs')
+    config['log_dir'] = os.path.join(config['output_dir'], 'logs')
 
-    config['dirs'] = sub_dirs
+    os.makedirs(config['log_dir'], exist_ok=True) #path for log_dir
 
-    if os.path.exists(base_dir):
-        # all the required subdirectories should already exist if the base_dir exists
-        pass
-    else:
-        # otherwise, create the subdirectories
-        for sub_dir in sub_dirs.values():
-            os.makedirs(sub_dir,exist_ok=True)
 
+    #=== subdirectories for separate extractors ===
+    extractor_output_paths = {}
+
+    # Create versioned subdirectories for each extractor based on module name
+    for e_name, e_module in config['extractors'].items():
+        versioned_dir = os.path.join(config['output_dir'], e_name, e_module)
+
+        # Paths organized by type for clarity
+        extractor_output_paths[e_name] = {
+            'dirs': {
+                'data':     os.path.join(versioned_dir, 'data'),
+                'metadata': os.path.join(versioned_dir, 'metadata'),
+            },
+            'proc_list_fn': os.path.join(versioned_dir, 'metadata', 'processed.csv')
+        }
+
+    # Create all directories in each entry
+    for paths_dict in extractor_output_paths.values():
+        for dir_path in paths_dict['dirs'].values():
+            os.makedirs(dir_path, exist_ok=True)
+
+    config['paths'] = extractor_output_paths
     return config
+
 
 
 
 # Set up logging based on config
-def setup_logging(log_dir, debug):
+def setup_logging(config, debug):
     # Create a timestamp for the log file (e.g., '2024-10-22_14-30-00')
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
@@ -69,14 +80,22 @@ def setup_logging(log_dir, debug):
     if debug: #if running with --debug flag, amend log file name
         fn = f'debug-{fn}'
 
-    log_file = os.path.join(log_dir, fn)
+    log_file = os.path.join(config['log_dir'], fn)
 
     # Set up logging configuration
+    logging.addLevelName(logging.WARNING, "WARN") #shortern "WARNING" in log file to "WARN"
+
     logging.basicConfig(
         filename=log_file,
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%H:%M:%S"  # Only show hours, minutes, seconds
     )
+
+
+
+
+
 
 def init_containers(config):
     expt = containers.Experiment()
@@ -92,8 +111,12 @@ def load_extractors(config):
 
         module_path = f"pingparser.extractors.{e_name}.{e_ver}"
         try:
-            # Try to dynamically import the module
-            extractors[e_name] = importlib.import_module(module_path)
+            # Dynamically import the module
+            module = importlib.import_module(module_path)
+
+            # Instantiate the Extractor class within the imported module
+            extractor_class = getattr(module, "Extractor")  # Assuming each module has an Extractor class
+            extractors[e_name] = extractor_class()  # Instantiate the class
 
             # Logging successful import
             logging.info(f'{e_name}: {module_path}')
@@ -105,6 +128,10 @@ def load_extractors(config):
         except ImportError as e:
             # Log other import-related errors
             logging.error(f"ImportError: Failed to import {module_path}. Error: {e}")
+
+        except AttributeError as e:
+            # Handle case where the module does not have an Extractor class
+            logging.error(f"AttributeError: {module_path} does not contain an 'Extractor' class. Error: {e}")
 
     return extractors
 
@@ -119,65 +146,199 @@ def load_file_paths(expt):
                 formatted_error = f"Path: {error[0]}, File: {error[1]}"
                 logging.error(formatted_error)
 
+    return expt
+
 def load_processed_list(config):
+    proc_list = {}
+    for e_name in config['extractors']:
+        fn = config['paths'][e_name]['proc_list_fn']
 
-    if not os.path.exists(config['proc_list_fn']):
-        logging.info(f"Processed list not found. Creating {config['proc_list_fn']}")
+        if not os.path.exists(fn):
+            logging.info(f"Processed list not found. Creating {fn}")
 
-    proc_list = boo.read_csv_or_create(config['proc_list_fn'], colnames=['anim', 'sess', 'length'])
+        proc_list[e_name] = boo.read_csv_or_create(fn, colnames=['anim', 'sess', 'length'])
 
     return proc_list
 
-def preprocess(expt, extractors, cutoff_min, proc_list, overwrite):
-    rows_to_delete = []
+def save_session_data(session_file_path, df_sess):
+    """Save session data to CSV file."""
+    os.makedirs(os.path.dirname(session_file_path), exist_ok=True)
+    df_sess.to_csv(session_file_path, index=False)
+    logging.info(f"Saved: {session_file_path}")
 
-    #calculate total work to be done (roughly--this ignores how much is already processed)
+def extract_session_data(extractor, df_sess_raw, subsess_name):
+    """Extract session data using the provided extractor."""
+    logging.info(f"Extracting: {subsess_name}")
+    return extractor.extract(df_sess_raw, subsess_name)
+
+def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug=False):
+    """
+    Preprocess and save each session, updating proc_list incrementally to ensure robustness.
+    """
+    proc_list_path = config['paths'][extractor.TYPE]['proc_list_fn']  # Path to proc_list CSV file for this extractor
+    data_dir = config['paths'][extractor.TYPE]['dirs']['data']  # Directory for session data
+
+    # Calculate the total work--quick and coarse way--doesn't pre-check if session already processed etc.
     total_work = sum(len(anim.subsess_paths) for anim in expt.anim.values())
 
-    with tqdm(total=total_work, desc="Preprocessing Sessions") as pbar:
+    with tqdm(total=total_work, desc=f"Preprocessing {extractor.TYPE}") as pbar, \
+         ProcessPoolExecutor(max_workers=4) as extract_executor, \
+         ThreadPoolExecutor(max_workers=4) as save_executor:
+
         for anim_name, anim in expt.anim.items():
+            data_dir_anim = os.path.join(data_dir, anim_name)
+            # Filter proc_list for this animal's sessions
             anim_proc_list = boo.slice(proc_list, {'anim': [anim_name]})['sess']
-            this_cutoff_min = cutoff_min.get(anim_name, pd.to_datetime(cutoff_min['default'])) #return second value if anim_name not in dict
+
+            # cross check list of processed files against number of files actually existing.
+            count_existing_files(anim_proc_list, data_dir_anim)
+
+
+            this_cutoff_min = config['cutoff_min'].get(anim_name, pd.to_datetime(config['cutoff_min']['default']))
 
             subsess = {}
-            new_proc_list, new_proc_len = [], []
+            new_entries = []  # Temporary list to hold new entries for proc_list
+
+            session_futures = {}  # futures and their session names (for saving)
 
 
             for subsess_name, fn in anim.subsess_paths.items():
-                pbar.update(1)
 
-                overwrite_msg = ''
-                if subsess_name in anim_proc_list.values:  # already processed
-                    if overwrite:
-                        row_num = anim_proc_list[anim_proc_list == subsess_name].index[0]
-                        rows_to_delete.append(row_num)
-                        logging.warning(f'Overwriting {subsess_name}')
-                    else:
-                        continue
+                # conditions for skipping
+                should_skip = (
+                        subsess_name in anim_proc_list.values or  # Already processed
+                        timestr.search(subsess_name)[1] < this_cutoff_min or  # Before cutoff date
+                        extractor.TYPE not in fn  # Missing required data file--could happen if program is interrupted early
+                )
 
-                if timestr.search(subsess_name)[1] < this_cutoff_min:
+                if should_skip:
+                    pbar.update(1)
                     continue
-                df_sess_raw = genparse.read_raw(fn['Events'])
-                df_sess = genparse.sess_summary(df_sess_raw, subsess_name, extractors['events'])
+
+
+                # Define the full path for the session file in the correct directory
+                session_file_path = os.path.join(data_dir_anim, f"{subsess_name}.csv")
+
+
+                #submit the job, and the "ticket" is stored as a "future"
+                future = extract_executor.submit(extract_session_data, extractor,
+                                                 fn[extractor.TYPE], subsess_name)
+
+                #store each future as a session key, and then associated info as values
+                session_futures[future] = (anim_name, subsess_name, session_file_path)
+
+
+            # Process completed futures as they finish. the loop only yields when each future completes
+            for future in as_completed(session_futures):
+                anim_name, subsess_name, session_file_path = session_futures[future]
+
+                # Retrieve the extracted data
+                df_sess = future.result()
                 subsess[subsess_name] = df_sess
 
-                new_proc_list.append(subsess_name)
-                new_proc_len.append(len(df_sess))
+                # Schedule the save operation concurrently using ThreadPoolExecutor (for I/O tasks)
+                save_executor.submit(save_session_data, session_file_path, df_sess)
 
-            new_df = pd.DataFrame({'anim': anim_name, 'sess': new_proc_list, 'length': new_proc_len})
-            proc_list = pd.concat([proc_list, new_df], ignore_index=True)
+                # Update proc_list with the new entry
+                new_entries.append({"anim": anim_name, "sess": subsess_name, "length": len(df_sess)})
+                pbar.update(1)
+            pbar.refresh()
 
-            anim.subsess = subsess
+            # Append new entries to proc_list and save incrementally after each animal
+            if new_entries:
+                new_df = pd.DataFrame(new_entries)
+                proc_list = pd.concat([proc_list, new_df], ignore_index=True)
 
+                proc_list = proc_list.sort_values(['anim', 'sess'], ignore_index=True) #sort
 
-    proc_list = proc_list[~proc_list.index.isin(rows_to_delete)]
-    proc_list['length'] = proc_list['length'].astype('int')
-    proc_list = proc_list.sort_values(['anim', 'sess'], ignore_index=True)
+                # Save proc_list to a temporary file first, then rename it
+                temp_file = f"{proc_list_path}.temp"
+                proc_list.to_csv(temp_file, index=False)
+                os.replace(temp_file, proc_list_path)  # Atomically replace the old file
+                logging.info(f"Added new {anim_name} entries to proc_list.")
+
+            anim.subsess = subsess  # Store processed data for the animal
+
+    #check that processed list count matches existing files in directory
+    check_proc_list(proc_list, data_dir, config)
+
     return proc_list, expt
 
-def save_processed_list(proc_list, proc_list_fn):
-    proc_list.to_csv(proc_list_fn, index=False)
-    logging.info("Updated processed list.")
+
+def check_proc_list(proc_list, data_dir, config):
+    """
+    Checks the integrity of the proc_list:
+    1. Verifies that the number of entries in proc_list equals the number of unique rows defined by 'anim' and 'sess'.
+    2. Verifies that the total number of entries in proc_list equals the total number of .csv files across all
+       subfolders in data_dir corresponding to animal names in config['animal_names'].
+
+    Parameters:
+    - proc_list (pd.DataFrame): The processed list DataFrame containing 'anim' and 'sess' columns.
+    - data_dir (str): The root directory containing data subfolders.
+    - config (dict): Configuration dictionary containing 'animal_names'.
+
+    Returns:
+    - dict: A dictionary summarizing the checks and any discrepancies found.
+    """
+
+
+    # Check 1: Unique entries in proc_list
+    unique_count = proc_list[['anim', 'sess']].drop_duplicates().shape[0]
+    proc_list_length = len(proc_list)
+
+    unique_check_passed = unique_count == proc_list_length
+    unique_check_message = (
+        f"Check duplicates in proc list--{'passed' if unique_check_passed else 'failed'}: "
+        f"{unique_count} unique, {proc_list_length} total."
+    )
+    if unique_check_passed:
+        logging.info(unique_check_message)
+    else:
+        logging.warning(unique_check_message)
+
+    # Check 2: Total number of files across subfolders
+
+    total_file_count = 0
+    for anim_name in config['animal_names']:
+        anim_folder = os.path.join(data_dir, anim_name)
+        if os.path.exists(anim_folder):
+            total_file_count += sum(1 for f in os.listdir(anim_folder) if f.endswith('.csv'))
+
+    file_check_passed = total_file_count == proc_list_length
+    file_check_message = (
+        f"Check file count vs proc list--{'passed' if file_check_passed else 'failed'}: "
+        f"{total_file_count} found,  {proc_list_length} in list."
+    )
+
+
+    if file_check_passed:
+        logging.info(file_check_message)
+    else:
+        logging.warning(file_check_message)
+
+
+
+def count_existing_files(proc_list, data_dir):
+    """
+    Cross-checks the number of processed sessions in `proc_list` with the number of files in `data_dir`.
+    Logs a warning if there is a discrepancy.
+    """
+    # Count unique sessions in proc_list for the extractor
+    unique_sessions_count = len(proc_list)
+
+    # Count the number of .csv files in the data directory (for the extractor)
+    if not os.path.exists(data_dir):
+        saved_files_count = 0
+    else:
+        saved_files_count = sum(1 for f in os.listdir(data_dir) if f.endswith('.csv'))
+
+    # Log the results of the check
+    if unique_sessions_count != saved_files_count:
+        logging.warning(
+            f"Mismatch: {unique_sessions_count} sessions in proc_list but {saved_files_count} files in {data_dir}.")
+
+
+
 
 def merge_sessions(expt):
     # === merge all new session dataframes occurring on the same day ===
@@ -214,73 +375,6 @@ def merge_sessions(expt):
 
     return expt
 
-def save_events(expt, output_root):
-
-    for anim_name, anim in expt.anim.items():
-        if len(anim.new_df) == 0:
-            logging.info(f"{anim_name}: no new sessions found.")
-            continue
-        fn = os.path.join(output_root, anim_name + '.csv')
-
-        new_sess = anim.new_df.sess.unique()
-        if os.path.exists(fn):
-            big_df = pd.read_csv(fn)
-        else:
-            anim.new_df.to_csv(fn, index=False)
-            logging.info(f"{fn} doesn't exist. Creating...")
-            continue
-
-        # check proportion of big_df trials with sessions that are in new_df
-        # if all is done right, it should be 0 for non-overwriting case
-        n_old = np.sum(big_df.sess.isin(new_sess))
-        p_old = n_old / len(big_df) if len(big_df) > 0 else 0
-        if p_old > 0:
-            logging.info(f"{anim_name}: {n_old} trials ({p_old * 100:.2f}%) in big_df are contained in new_df sessions.")
-            user_input = input("Overwrite? (y/n)")
-            if user_input == 'y':
-                big_df = boo.slice(big_df, {'sess': new_sess}, '-')  # remove old data
-        else:
-            logging.info(f"{anim_name}: adding new sessions")
-
-        big_df = pd.concat([big_df, anim.new_df])
-        big_df = big_df.sort_values(by=['sess', 'TrialNum'], ascending=[True, True])
-        big_df.to_csv(fn, index=False)
-        anim.big_df = big_df
-        logging.info(f"Saved new sessions for {anim_name}.")
-
-def extract_and_save_touch(expt, extractor, config):
-    tracker_name = 'Touch_xy_bs'
-
-    output_root = config['dirs'][f"{tracker_name}_dir"]
-
-    for anim_name, anim in expt.anim.items():
-        print(anim_name)
-        fd = os.path.join(output_root, anim_name)
-
-        # create rat folder if it no exist
-        if not os.path.exists(fd):
-            os.makedirs(fd)
-
-        for subsess_name in anim.subsess:
-            subsess_path = anim.subsess_paths[subsess_name]
-            if tracker_name not in subsess_path:
-                continue
-
-            fn = os.path.join(fd, subsess_name + '.csv')
-
-            if os.path.exists(fn):
-                if config['overwrite']:
-                    to_write = 'y'
-                else:
-                    to_write = 'n'
-            else:
-                to_write = 'y'
-
-            if to_write == 'y':
-                xy_df = extractor.resp_xy(subsess_path[tracker_name], subsess_name, tracker_name)
-                xy_df.to_csv(fn, index=False)
-
-
 
 def main(config_file, debug=False):
     try:
@@ -288,7 +382,7 @@ def main(config_file, debug=False):
         config = setup_config(config_file)
 
         # start logger
-        setup_logging(config['dirs']['logs'], debug)
+        setup_logging(config, debug)
 
         # Initialize containers for animal data
         expt = init_containers(config)
@@ -296,28 +390,27 @@ def main(config_file, debug=False):
         # Load extractor modules
         extractors = load_extractors(config)
 
-        # Load raw file paths
-        load_file_paths(expt)
+        # Load raw file paths, store in anim.subsess_paths for each animal
+        expt = load_file_paths(expt)
 
         # Load list of already pre-processed sessions
         proc_list = load_processed_list(config)
 
         # Preprocess sessions, skipping those already in list, and update list
-        proc_list, expt = preprocess(expt, extractors, config['cutoff_min'], proc_list, config['overwrite'])
+        #for e_name in config['extractors']:
+
+        for e_name in config['extractors']:
+            logging.info(f"Processing {e_name}")
+            updated_proc_list, expt = preprocess(config, expt,
+                                                 extractors[e_name],
+                                                 proc_list[e_name], debug=debug)
+
+            proc_list[e_name] = updated_proc_list
+
 
         # Merge sessions occurring on same day
         expt = merge_sessions(expt)
 
-        #need some way to deal with contingencies e.g. what if program is interrupted in any of the next 3 lines??
-        #extract touch
-        extract_and_save_touch(expt, extractors['Touch_xy_bs'], config)
-
-        # Save events
-        save_events(expt, config['dirs']['events_dir'])
-
-
-        # Save processed list
-        save_processed_list(proc_list, config['proc_list_fn'])
 
 
 
