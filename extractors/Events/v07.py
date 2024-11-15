@@ -29,20 +29,46 @@ class Extractor:
     DATE = "10.31.24"
     TYPE = 'Events'
 
-    COLNAMES = [
-        'TrialNum', 'FixationDur', 'RespError_cuefrac', 'Cue_D', 'CueMove', 'RespPause',
-        'RespBox_type', 'CueRel1_x', 'CueRel1_y', 'CueRel2_x', 'CueRel2_y', 'Cue1_x', 'Cue1_y',
-        'Cue2_x', 'Cue2_y', 'anchor1_x', 'anchor1_y', 'anchor2_x', 'anchor2_y', 'ITI', 'Welzl_x',
-        'Welzl_y', 'Welzl_D', 'WMDelay', 'WMTrial', 'optoTrial', 'TrialType', 'TrialDur',
-        'FixationBreaks', 'warmup_state', 'FixationGraceDur'
-    ]
+    COLUMN_DTYPES = {
+        'TrialNum': 'Int64',  # Nullable integer type
+        'FixationDur': 'float64',
+        'RespError_cuefrac': 'float64',
+        'Cue_D': 'float64',
+        'CueMove': 'boolean',  # Nullable boolean type
+        'RespPause': 'float64',
+        'RespBox_type': 'object',
+        'CueRel1_x': 'float64',
+        'CueRel1_y': 'float64',
+        'CueRel2_x': 'float64',
+        'CueRel2_y': 'float64',
+        'Cue1_x': 'float64',
+        'Cue1_y': 'float64',
+        'Cue2_x': 'float64',
+        'Cue2_y': 'float64',
+        'anchor1_x': 'float64',
+        'anchor1_y': 'float64',
+        'anchor2_x': 'float64',
+        'anchor2_y': 'float64',
+        'ITI': 'float64',
+        'Welzl_x': 'float64',
+        'Welzl_y': 'float64',
+        'Welzl_D': 'float64',
+        'WMDelay': 'float64',
+        'WMTrial': 'boolean',  # Nullable boolean type
+        'optoTrial': 'boolean',  # Nullable boolean type
+        'TrialType': 'object',
+        'TrialDur': 'float64',
+        'FixationBreaks': 'Int64',  # Nullable integer type
+        'warmup_state': 'Int64',  # Nullable integer type
+        'FixationGraceDur': 'float64',
+    }
 
     RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay']
 
 
     def __init__(self):
         self.RAW_TO_DELETE = []  # list of dicts for slicing away raw df in pre_processor()
-        self.row_holder_template = pd.DataFrame({'val': None}, index=self.COLNAMES)
+        self.row_holder_template = pd.DataFrame({'val': None}, index=self.COLUMN_DTYPES.keys())
 
 
     def extract(self, fn, sess_name):
@@ -67,7 +93,7 @@ class Extractor:
                 sess_extracts.append(one_trial['val'].tolist())
 
         # Convert list of extracted trials into a DataFrame
-        df_sess = pd.DataFrame(sess_extracts, columns=self.COLNAMES)
+        df_sess = pd.DataFrame(sess_extracts, columns=self.COLUMN_DTYPES.keys())
 
         if df_sess.empty:
             return pd.DataFrame()

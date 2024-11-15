@@ -19,6 +19,9 @@ import pyfun.bamboo as boo
 import pyfun.timestrings as timestr
 import pingparser.check as check
 
+import glob
+import time
+
 # Load YAML config
 def setup_config(config_file):
     with open(config_file, 'r') as f:
@@ -49,13 +52,20 @@ def setup_paths(config):
     for e_name, e_module in config['extractors'].items():
         versioned_dir = os.path.join(config['output_dir'], e_name, e_module)
 
-        # Paths organized by type for clarity
+        # Base paths
+        paths = {
+            'data': os.path.join(versioned_dir, 'data'),
+            'metadata': os.path.join(versioned_dir, 'metadata'),
+        }
+
+        # Add 'big_dfs' path only for 'Events' #we don't really need omnibus table for trackers / file too big
+        if e_name == 'Events':
+            paths['big_dfs'] = os.path.join(versioned_dir, 'big_dfs')
+
+        # Assign to the extractor output paths
         extractor_output_paths[e_name] = {
-            'dirs': {
-                'data':     os.path.join(versioned_dir, 'data'),
-                'metadata': os.path.join(versioned_dir, 'metadata'),
-            },
-            'proc_list_fn': os.path.join(versioned_dir, 'metadata', 'processed.csv')
+            'dirs': paths,
+            'proc_list_fn': os.path.join(versioned_dir, 'metadata', 'processed.csv'),
         }
 
     # Create all directories in each entry
@@ -340,40 +350,34 @@ def count_existing_files(proc_list, data_dir):
 
 
 
-def merge_sessions(expt):
+def merge_sameday_sessions(dfs_by_timestr):
     # === merge all new session dataframes occurring on the same day ===
     # TODO: what happens if session is over midnight?
-    for anim_name, anim in expt.anim.items():
-        # convert keys (in time string format) to datetime objects
-        subsess_dt = {timestr.search(key)[1]: value for key, value in anim.subsess.items()}
-        anim.sess = boo.merge_within_day(subsess_dt)
+
+    # convert keys (in time string format) to datetime objects
+    dfs_by_time = {timestr.search(key)[1]: value for key, value in dfs_by_timestr.items()}
+
+    merged_sessions = boo.merge_within_day(dfs_by_time)
+
+    return merged_sessions
 
 
-    # === merge all new sessions into single df===
-    for anim_name, anim in expt.anim.items():
-        # Concatenate the dataframes in the correct order
-        anim.new_df = boo.concat_df_dicts(anim.sess, reset_index=True)
+def load_file_for_omnibus(file_path):
+    """Loads a file and returns its timestamp and DataFrame."""
+    datetime_str = os.path.basename(file_path).split('.')[0]
+    try:
+        df = pd.read_csv(file_path)
+        return datetime_str, df
+    except pd.errors.EmptyDataError:
+        return datetime_str, None
 
-
-
-    # === perform basic checks of df lengths after merges ===
-
-    #foodate = '2024-08-18T11_20_00'
-    #expt.anim['EC01'].subsess[foodate] = expt.anim['EC01'].subsess[foodate].iloc[0:10]
-
-    err_msgs = check.subsess_lens(expt)  # sanity check
-    if err_msgs:
-        prefix = 'Subsess merge length: '
-        for err_msg in err_msgs:
-            logging.error(prefix + err_msg)
-
-    err_msgs = check.new_df_lens(expt)  # sanity check
-    if err_msgs:
-        prefix = 'Omnibus merge length: '
-        for err_msg in err_msgs:
-            logging.error(prefix + err_msg)
-
-    return expt
+# Merge all sessions to form omnibus df and save in parallel
+def create_omnibus(anim_name, anim, config, e_name):
+    # Concatenate the dataframes in the correct order
+    big_df = boo.concat_df_dicts(anim.sess, reset_index=True)
+    fn = os.path.join(config['paths'][e_name]['dirs']['big_dfs'], anim_name + '.csv')
+    big_df.to_csv(fn, index=False)
+    return anim_name, fn, big_df
 
 
 def main(config_file, debug=False):
@@ -405,13 +409,66 @@ def main(config_file, debug=False):
                                                  extractors[e_name],
                                                  proc_list[e_name], debug=debug)
 
-            proc_list[e_name] = updated_proc_list
+            proc_list[e_name] = updated_proc_list #this has already been saved in preprocess()
 
 
-        # Merge sessions occurring on same day
-        expt = merge_sessions(expt)
+        # reconstruct each subject's overall Events table. hacky for now,
+        e_name = 'Events' #possible to loop through a list of extractor names, but we only want omnibus for events
+        data_dir = config['paths'][e_name]['dirs']['data']
+
+        total_work = len(expt.anim)
+
+        with tqdm(total=total_work, desc=f"Pulling {e_name} sessions") as pbar:
+            for anim_name in config['animal_names']:
+                anim_folder = os.path.join(data_dir, anim_name)
+                anim_files = glob.glob(os.path.join(anim_folder, "*.csv"))
+
+                dfs_by_timestr = {}
+
+                with ThreadPoolExecutor(max_workers=16) as executor: #parallel processing
+                    future_to_file = {executor.submit(load_file_for_omnibus, f): f for f in anim_files}
+
+                    for future in as_completed(future_to_file):
+                        datetime_str, df = future.result()
+                        if df is not None:
+                            dfs_by_timestr[datetime_str] = df
+
+                merged_sessions = merge_sameday_sessions(dfs_by_timestr)
+
+                expt.anim[anim_name].subsess = dfs_by_timestr
+                expt.anim[anim_name].sess    = merged_sessions
+                pbar.update(1)
 
 
+        with tqdm(total=total_work, desc=f"Saving {e_name} omnibus") as pbar:
+            with ThreadPoolExecutor(max_workers=16) as executor:
+                # Prepare the futures for parallel execution
+                futures = {
+                    executor.submit(create_omnibus, anim_name, anim, config, e_name): anim_name
+                    for anim_name, anim in expt.anim.items()
+                }
+
+                # Process the results as they complete
+                for future in as_completed(futures):
+                    anim_name = futures[future]  # Retrieve the associated animal name
+                    try:
+                        anim_name, file_path, big_df = future.result()
+                        expt.anim[anim_name].big_df = big_df
+                        logging.info(f"Saved omnibus dataframe for {anim_name} to {file_path}")
+                    except Exception as e:
+                        logging.error(f"Failed to save dataframe for {anim_name}. Error: {e}")
+
+                    pbar.update(1)
+
+        pbar.refresh()
+
+        err_msgs = check.merged_df_lens(expt, verbose=False)  # sanity check
+        if err_msgs:
+            prefix = 'Omnibus merge length: '
+            for err_msg in err_msgs:
+                logging.error(prefix + err_msg)
+        else:
+            logging.info(f"Omnibus merge success: {e_name}")
 
 
         logging.info("Processing completed successfully.")
@@ -423,7 +480,7 @@ def main(config_file, debug=False):
 if __name__ == "__main__":
     # Example usage: python autoproc.py --config configs/config_v05.yaml
 
-    # Default to v05 config file for debugging purposes
+    # Default config file for debugging
     default_config_path = 'configs/config_v06.yaml'
 
     parser = argparse.ArgumentParser(description='Run auto processing with configuration.')
