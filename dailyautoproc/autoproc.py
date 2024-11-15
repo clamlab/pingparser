@@ -468,7 +468,7 @@ def main(config_file, debug=False):
             for err_msg in err_msgs:
                 logging.error(prefix + err_msg)
         else:
-            logging.info(f"Omnibus merge success: {e_name}")
+            logging.info(f"Omnibus merge length checks passed: {e_name}")
 
 
         logging.info("Processing completed successfully.")
