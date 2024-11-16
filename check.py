@@ -72,23 +72,25 @@ def random_trial(anim, running_subj, mode='big'):
     return row
 
 
-def new_df_lens(expt):
+def merged_df_lens(expt, verbose=True):
     all_passed = True
     err_msgs = []
     for anim_name, anim in expt.anim.items():
-        new_lens = len(anim.new_df)
+        big_df_lens = len(anim.big_df) #omnibus df
         sess_lens = np.sum([len(df) for df in anim.sess.values()])
         subsess_lens = np.sum([len(df) for df in anim.subsess.values()])
-        passed = new_lens == sess_lens == subsess_lens
+        passed = big_df_lens == sess_lens == subsess_lens
 
         if passed == False:
             all_passed = False
-            err_msg = f"{anim_name}, big: {new_lens}, sess: {sess_lens}, subsess: {subsess_lens}"
-            print(err_msg)
+            err_msg = f"{anim_name}, big: {big_df_lens}, sess: {sess_lens}, subsess: {subsess_lens}"
+            if verbose:
+                print(err_msg)
             err_msgs.append(err_msg)
 
     if all_passed:
-        print('Overall length checks passed.')
+        if verbose:
+            print('Overall length checks passed.')
 
     return err_msgs
 

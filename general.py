@@ -64,17 +64,18 @@ def format_prepost_xy(param_prepost, prefix):
     return output
 
 
-def sess_summary(df_sess_raw, sess_name, expt_module):
+def events_summary(df_sess_raw, sess_name, expt_module):
     """
-    process one session raw file and return one info row per trial
+    process one session raw file and return one row per trial,
+    columns containing per-trial variables e.g. stimulus, animal choices...
     :expt_module: module that contains helper functions
     and attribs specific to the bonsai experiment
     """
 
-    pre_processor = expt_module.pre_processor
-    trial_summarizer = expt_module.trial_summarizer
-    running_valuator = expt_module.running_valuator
-    post_processor = expt_module.post_processor
+    pre_processor = expt_module._pre_processor
+    trial_summarizer = expt_module._trial_summarizer
+    running_valuator = expt_module._running_valuator
+    post_processor = expt_module._post_processor
     colnames = expt_module.COLNAMES
 
 
@@ -107,7 +108,6 @@ def sess_summary(df_sess_raw, sess_name, expt_module):
         except KeyError: #if dataframe is empty, 'TrialNum' does not exist
             continue
 
-    # one_sess_df['warmup'] = one_sess_df['TrialNum'] <= lora.find_warm_up_done(df_sess)
     df_sess['sess'] = sess_name
 
     if post_processor is not None:
@@ -183,11 +183,18 @@ def str_to_list(input_str, brackets='round', dtype='float'):
     for r in to_remove:
         input_str = input_str.replace(r, '')
 
-    #out_list = [s for s in input_str.split(',')]
-    out_list = input_str.split(',')
+    try:
 
-    if dtype=="float":
-        out_list = [float(s) for s in out_list]
+        out_list = input_str.split(',')
+
+        if dtype=="float":
+            out_list = [float(s) for s in out_list]
+
+        if len(out_list) != 2:
+            return (None, None)
+
+    except ValueError:
+        return (None, None)
 
     return out_list
 

@@ -50,7 +50,11 @@ def get_subsess_paths(animal_name, animal_root, remove_prefix='results_', verbos
     scrape data folder for one animal, and return all the corresponding data files, grouped by timestamp
     It is assumed that the file structure is:
 
-    animal_id/datetime/results_datetime2/*.csv
+    animal_id/datetime/results_datetime2/DataFileName.csv
+
+    where DataFileName can be e.g. "Events", "body_xy" etc. These names are automatically extracted
+    from the file name itself
+
 
     #in bonsai there is a new session folder (datetime) created when bonsai is first launched
     #each session has a results subfolder (results_datetime2), and stopping and re-starting
