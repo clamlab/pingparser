@@ -7,6 +7,9 @@ import yaml
 import argparse #for handling command-line args
 import importlib
 
+from pyfun.singleton import SingletonInstance
+import atexit
+
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 
@@ -60,7 +63,9 @@ def setup_paths(config):
 
         # Add 'big_dfs' path only for 'Events' #we don't really need omnibus table for trackers / file too big
         if e_name == 'Events':
-            paths['big_dfs'] = os.path.join(versioned_dir, 'big_dfs')
+            for s in ['big_dfs', 'session_stats']:
+                paths[s] = os.path.join(versioned_dir, s)
+
 
         # Assign to the extractor output paths
         extractor_output_paths[e_name] = {
@@ -176,6 +181,31 @@ def save_session_data(session_file_path, df_sess):
     df_sess.to_csv(session_file_path, index=False)
     logging.info(f"Saved: {session_file_path}")
 
+def save_session_stats(session_stats_df, fn):
+    # Check if the file exists
+    if os.path.exists(fn):
+        # Load existing data into old_session_stats_df
+        old_session_stats_df = pd.read_csv(fn)
+
+        # Concatenate the new and old DataFrames
+        combined_df = pd.concat([old_session_stats_df, session_stats_df])
+
+        # Drop duplicate rows based on the 'date' column, keeping the last occurrence
+        updated_df = combined_df.drop_duplicates(subset='date', keep='last')
+    else:
+        # If the file does not exist, use the current DataFrame
+        updated_df = session_stats_df
+
+    # Save the updated DataFrame to a temporary file first
+    temp_file = f"{fn}.temp"
+    updated_df.to_csv(temp_file, index=False)
+
+    # Atomically replace the old file with the updated file
+    os.replace(temp_file, fn)
+    logging.info(f"Saved session stats to {fn}.")
+
+
+
 def extract_session_data(extractor, df_sess_raw, subsess_name):
     """Extract session data using the provided extractor."""
     logging.info(f"Extracting: {subsess_name}")
@@ -196,6 +226,7 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
          ThreadPoolExecutor(max_workers=4) as save_executor:
 
         for anim_name, anim in expt.anim.items():
+            print(anim_name)
             data_dir_anim = os.path.join(data_dir, anim_name)
             # Filter proc_list for this animal's sessions
             anim_proc_list = boo.slice(proc_list, {'anim': [anim_name]})['sess']
@@ -207,10 +238,11 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
             this_cutoff_min = config['cutoff_min'].get(anim_name, pd.to_datetime(config['cutoff_min']['default']))
 
             subsess = {}
+            subsess_stats = {}
+
             new_entries = []  # Temporary list to hold new entries for proc_list
 
             session_futures = {}  # futures and their session names (for saving)
-
 
             for subsess_name, fn in anim.subsess_paths.items():
 
@@ -226,6 +258,7 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
                     continue
 
 
+
                 # Define the full path for the session file in the correct directory
                 session_file_path = os.path.join(data_dir_anim, f"{subsess_name}.csv")
 
@@ -238,14 +271,15 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
                 session_futures[future] = (anim_name, subsess_name, session_file_path)
 
 
-            # Process completed futures as they finish. the loop only yields when each future completes
+            # === save each session (unmerged) separately as they get processed ===
             for future in as_completed(session_futures):
                 anim_name, subsess_name, session_file_path = session_futures[future]
 
                 # Retrieve the extracted data
-                df_sess = future.result()
+                df_sess, df_sess_stats = future.result()
                 subsess[subsess_name] = df_sess
 
+                subsess_stats[subsess_name] = df_sess_stats
                 # Schedule the save operation concurrently using ThreadPoolExecutor (for I/O tasks)
                 save_executor.submit(save_session_data, session_file_path, df_sess)
 
@@ -253,6 +287,15 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
                 new_entries.append({"anim": anim_name, "sess": subsess_name, "length": len(df_sess)})
                 pbar.update(1)
             pbar.refresh()
+
+
+            # === ONLY FOR EVENTS: merge (sameday), then save, session stats ===
+            merged_stats = merge_sameday_stats(subsess_stats)
+            # Convert dictionary to DataFrame
+            session_stats_df = pd.DataFrame.from_dict(merged_stats, orient='index').reset_index()
+            session_stats_df.rename(columns={'index': 'date'}, inplace=True)
+            fn = os.path.join(config['paths']['Events']['dirs']['session_stats'], f"{anim_name}.csv")
+            save_session_stats(session_stats_df, fn)
 
             # Append new entries to proc_list and save incrementally after each animal
             if new_entries:
@@ -361,6 +404,41 @@ def merge_sameday_sessions(dfs_by_timestr):
 
     return merged_sessions
 
+def merge_sameday_stats(subsess_stats):
+    # convert keys (in time string format) to datetime objects
+    subsess_stats = {timestr.search(key)[1]: value for key, value in subsess_stats.items()}
+    grouped_dates = boo.group_datetime_objects_by_date(subsess_stats.keys())
+
+    merged_stats = {}
+    for date, sess_times in grouped_dates.items():
+        merged_dict = {}
+        this_merged_stats = {}
+
+        for s in sess_times:
+            this_sess_stats = subsess_stats[s]
+            for stat_name, stat_value in this_sess_stats.items():
+                if stat_name not in merged_dict:
+                    merged_dict[stat_name] = []
+
+                merged_dict[stat_name].append(stat_value)
+        earliest =  min(merged_dict['start_time'])
+        latest   =  max(merged_dict['end_time'])
+        latest_index = merged_dict['end_time'].index(latest) #use for getting latest trialtype on each day
+
+        this_merged_stats.update({'start_time': earliest.strftime('%H:%M'),
+                                  'end_time'  :   latest.strftime('%H:%M')})
+
+        this_merged_stats['last_TrialType'] = merged_dict['last_TrialType'][latest_index]
+
+        for stat_name in ['n_correct', 'n_attempted', 'n_total']:
+            this_merged_stats[stat_name] = np.sum(merged_dict[stat_name])
+
+        merged_stats[date] = this_merged_stats
+
+    merged_stats = {key.strftime('%Y-%m-%d'): value for key, value in merged_stats.items()} #convert keys back to str
+
+    return merged_stats
+
 
 def load_file_for_omnibus(file_path):
     """Loads a file and returns its timestamp and DataFrame."""
@@ -401,8 +479,6 @@ def main(config_file, debug=False):
         proc_list = load_processed_list(config)
 
         # Preprocess sessions, skipping those already in list, and update list
-        #for e_name in config['extractors']:
-
         for e_name in config['extractors']:
             logging.info(f"Processing {e_name}")
             updated_proc_list, expt = preprocess(config, expt,
@@ -410,6 +486,12 @@ def main(config_file, debug=False):
                                                  proc_list[e_name], debug=debug)
 
             proc_list[e_name] = updated_proc_list #this has already been saved in preprocess()
+
+
+        # pull other metadata e.g. start and end time of session (across sub-sessions)
+        # TODO: refactor as extractor? (but we don't need to save subsession info and may be overkill because the data format may be too sparse)
+        pass
+
 
 
         # reconstruct each subject's overall Events table. hacky for now,
@@ -479,6 +561,23 @@ def main(config_file, debug=False):
 
 if __name__ == "__main__":
     # Example usage: python autoproc.py --config configs/config_v05.yaml
+
+    script_name = os.path.basename(__file__)
+
+    # === ensure that only one instance of this script is running at any time, by using a lock file ===
+
+    # Define an absolute path for the lock file
+    lock_dir = "C:\\script_locks"
+    os.makedirs(lock_dir, exist_ok=True)  # Ensure the directory exists
+    lock_file = os.path.join(lock_dir, "autoproc_py.lock")  # Unique lock file for your script
+
+    singleton = SingletonInstance(lock_file, script_name)
+    singleton.acquire_lock()
+    # Ensure the lock is released when the script exits
+    atexit.register(singleton.release_lock)
+
+    # ==================================================================================================
+
 
     # Default config file for debugging
     default_config_path = 'configs/config_v06.yaml'

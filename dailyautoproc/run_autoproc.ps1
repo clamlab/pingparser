@@ -15,3 +15,5 @@ $env:PYTHONPATH = $baseDir
 
 # Run the Python script with the desired arguments
 python "$pythonScript" --config "$configPath"
+
+Start-Sleep -Seconds 10 #pause before closing

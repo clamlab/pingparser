@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import pingparser.general as genparse
 import pyfun.bamboo as boo
-import pyfun.timestrings as tstr
+import pyfun.timestrings as timestr
 import pingparser.runningval as runningval
 
 #three cases:
@@ -26,44 +26,50 @@ import pingparser.runningval as runningval
 
 class Extractor:
     VERSION = "touch_v07"
-    DATE = "10.31.24"
+    DATE = "11.17.24"
     TYPE = 'Events'
-
     COLUMN_DTYPES = {
-        'TrialNum': 'Int64',  # Nullable integer type
-        'FixationDur': 'float64',
-        'RespError_cuefrac': 'float64',
-        'Cue_D': 'float64',
-        'CueMove': 'boolean',  # Nullable boolean type
-        'RespPause': 'float64',
-        'RespBox_type': 'object',
-        'CueRel1_x': 'float64',
-        'CueRel1_y': 'float64',
-        'CueRel2_x': 'float64',
-        'CueRel2_y': 'float64',
-        'Cue1_x': 'float64',
-        'Cue1_y': 'float64',
-        'Cue2_x': 'float64',
-        'Cue2_y': 'float64',
         'anchor1_x': 'float64',
         'anchor1_y': 'float64',
         'anchor2_x': 'float64',
         'anchor2_y': 'float64',
+        'correct': 'boolean',
+        'Cue1_x': 'float64',
+        'Cue1_y': 'float64',
+        'Cue2_x': 'float64',
+        'Cue2_y': 'float64',
+        'Cue_D': 'float64',
+        'CueMove': 'boolean',  # Nullable boolean type
+        'CueRel1_x': 'float64',
+        'CueRel1_y': 'float64',
+        'CueRel2_x': 'float64',
+        'CueRel2_y': 'float64',
+        'FixationBreaks': 'Int64',  # Nullable integer type
+        'FixationDur': 'float64',
+        'FixationGraceDur': 'float64',
         'ITI': 'float64',
+        'lapse_type': 'object', #'None', 'Fixation', Resp', 'Lick'
+        'optoTrial': 'boolean',  # Nullable boolean type
+        'RespBox_type': 'object',
+        'RespError_cuefrac': 'float64',
+        'RespPause': 'float64',
+        'reward_max_ms': 'Int64',
+        'TrialDur': 'float64',
+        'TrialNum': 'Int64',  # Nullable integer type
+        'TrialType': 'object',
+        'warmup_state': 'Int64',  # Nullable integer type
+        'Welzl_D': 'float64',
         'Welzl_x': 'float64',
         'Welzl_y': 'float64',
-        'Welzl_D': 'float64',
         'WMDelay': 'float64',
         'WMTrial': 'boolean',  # Nullable boolean type
-        'optoTrial': 'boolean',  # Nullable boolean type
-        'TrialType': 'object',
-        'TrialDur': 'float64',
-        'FixationBreaks': 'Int64',  # Nullable integer type
-        'warmup_state': 'Int64',  # Nullable integer type
-        'FixationGraceDur': 'float64',
     }
 
-    RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay']
+    RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms']
+
+    LAPSE_LABELS = {'RespMod_elapsed'    : 'resp',
+                    'FixationMod_elapsed': 'fixation',
+                    'LickMod_elapsed'    : 'lick'}
 
 
     def __init__(self):
@@ -77,10 +83,32 @@ class Extractor:
     	with columns containing per-trial variables (e.g., stimulus, animal choices).
     	"""
 
+
+
+
         df_sess_raw = genparse.read_raw(fn)  # Load raw data
+        sess_stats = {}
+
 
         if len(df_sess_raw) == 0:
-            return pd.DataFrame()
+            return pd.DataFrame(), sess_stats
+
+        """
+        #for some sessions, no value of reward_max_ms was pinged. Hacky way of inserting it
+        default_reward = 300 #default value of reward_max_ms (current as of 11.17.24)
+
+        if timestr.search(sess_name)[1] < pd.to_datetime('2024-11-10'):
+            reward_df = boo.slice(df_sess_raw, {'Subject': ['reward_max_ms']})
+
+            if len(reward_df) == 0:
+                df_sess_raw.loc[0.001] = {'TrialNum' : 0,
+                                          'Subject'  : 'reward_max_ms',
+                                          'Value'    : default_reward,
+                                          'Timestamp': df_sess_raw.loc[0]['Timestamp']}
+
+                df_sess_raw = df_sess_raw.sort_index()
+
+        """
 
         # Pre-process the raw session data
         df_sess_raw = self._pre_processor(df_sess_raw)
@@ -96,7 +124,7 @@ class Extractor:
         df_sess = pd.DataFrame(sess_extracts, columns=self.COLUMN_DTYPES.keys())
 
         if df_sess.empty:
-            return pd.DataFrame()
+            return pd.DataFrame(), sess_stats
 
         # === Compute running values for the entire session ===
         running_vals = self._running_valuator(df_sess_raw)
@@ -106,13 +134,65 @@ class Extractor:
             except KeyError:
                 continue  # Skip if 'TrialNum' does not exist due to empty DataFrame
 
+        # get lapses
+        slicer = [['Subject', ['ModOutcome']                                               , '+'],
+                  ['Value',   ['RespMod_elapsed', 'FixationMod_elapsed', 'LickMod_elapsed'], '+']]
+
+        col_name = 'lapse_type'
+        lapse_df = boo.chainslice(df_sess_raw, slicer)[['TrialNum', 'Value']]
+        lapse_df = lapse_df.rename(columns={'Value': col_name})
+        lapse_df[col_name] = lapse_df[col_name].replace(self.LAPSE_LABELS)
+
+        df_sess = boo.merge_update(df_sess, lapse_df, 'lapse_type', 'TrialNum')
+        df_sess.loc[df_sess.index[-1], 'lapse_type'] = 'last trial'
+                # last trial can be cut off at various points when experiment ends,
+                # either ignore for now or analyse further
+
+
         # Add session identifier
         df_sess['sess'] = sess_name
 
         # Post-process the session data
         df_sess = self._post_processor(df_sess)
 
-        return df_sess
+
+
+        # === get per-session data ===
+
+        df_sess_raw['Timestamp'] = df_sess_raw['Timestamp'].apply(lambda x: timestr.parse_time(x))
+        # use custom function instead of pd.to_datetime because the latter cannot handle
+        # multiple formats in the same table (bonsai stupidly rounds off some values
+        # leading it to sometimes classify the timestamp endings not as the usual .%f)
+
+        if pd.isna(df_sess_raw.iloc[-1]['Timestamp']):
+            df_sess_raw.drop(df_sess_raw.index[-1])
+
+
+        #   instead of one row per trial, it's a single row of session stats
+
+        #  session start and end times
+        trial_1 = boo.slice(df_sess_raw, {'TrialNum': [1]})
+            #trial 1 is after all the checks have passed--trial 0 is when bonsai has just started
+        try:
+            sess_stats['start_time'] = trial_1['Timestamp'].iloc[0]
+        except IndexError:
+            sess_stats['start_time'] = df_sess_raw['Timestamp'].iloc[0]
+
+        sess_stats['end_time'] = df_sess_raw.iloc[-1]['Timestamp']
+
+        for t in ['start_time', 'end_time']:
+            sess_stats[t] = sess_stats[t]
+
+        sess_stats['last_TrialType'] = df_sess['TrialType'].iloc[-1]
+
+        sess_stats['n_correct']   = df_sess['correct'].sum()
+        sess_stats['n_attempted'] = df_sess['lapse_type'].isna().sum() # TODO: handle last trial gracefully
+        sess_stats['n_attempted'] = max(sess_stats['n_correct'], sess_stats['n_attempted']) #TODO-- really hacky!!
+                                    #problem is how to handle last trial.
+        sess_stats['n_total']     = df_sess.TrialNum.max() #TODO: handle last trial gracefully
+
+
+        return df_sess, sess_stats
 
     def _calc_trial_dur(self, df_trial, start_event='ModEvent', end_event='Trial_ended'):
         """Calculate start and end times of trial."""
@@ -120,13 +200,13 @@ class Extractor:
         for event in [start_event, end_event]:
             try:
                 # take the first ModEvent and first Trial_ended (but there should only be one!)
-                timestr = boo.slice(df_trial, {'Subject': [event]})['Timestamp'].iloc[0]
+                timestamp = boo.slice(df_trial, {'Subject': [event]})['Timestamp'].iloc[0]
 
-                start_end.append(pd.to_datetime(timestr))
+                start_end.append(pd.to_datetime(timestamp))
             except:
                 start_end.append(None)
 
-        trial_dur = tstr.calc_dt(start_end[1], start_end[0], 'secs')
+        trial_dur = timestr.calc_dt(start_end[1], start_end[0], 'secs')
         return trial_dur
 
     def _pre_processor(self, df_sess_raw):
@@ -184,6 +264,14 @@ class Extractor:
         n_fix_breaks = len(boo.slice(df_trial, {'Value': ['FixationInterrupted']}))
         row_holder.loc['FixationBreaks', 'val'] = n_fix_breaks
 
+        #check if response was correct
+        if 'LickMod_on' in df_trial['Value'].values:
+            correct = True
+        else:
+            correct = False
+        row_holder.loc['correct', 'val'] = correct
+
+
         # find fixation completed event
         fixated = boo.slice(df_trial, {'Value': ['FixationCompleted']}, '+') # index where InTimerCompleted
         if len(fixated) == 0:
@@ -231,19 +319,21 @@ if __name__ == "__main__":
     import os
 
     # Example file path and session name for testing
-    fn = "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_10_20-10_40/results_2024-10-20T10_40_14/Events.csv"
-    subsess_name = '2024-10-20'
+    files = {'2024-10-20T10_40_14': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_10_20-10_40/results_2024-10-20T10_40_14/Events.csv",
+             '2024-11-08T10_25_52': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC06/2024_11_08-10_25/results_2024-11-08T10_25_52/Events.csv"}
 
-    # Check if the file exists
-    if not os.path.exists(fn):
-        print(f"Test file not found: {fn}")
-        sys.exit(1)
+    for subsess_name, fn in files.items():
 
-    # Create an instance of the Extractor
-    extractor = Extractor()
+        # Check if the file exists
+        if not os.path.exists(fn):
+            print(f"Test file not found: {fn}")
+            sys.exit(1)
 
-    # Run the extraction process on the test data
-    df_sess = extractor.extract(fn, subsess_name)
+        # Create an instance of the Extractor
+        extractor = Extractor()
+
+        # Run the extraction process on the test data
+        df_sess = extractor.extract(fn, subsess_name)
 
     # Print or display the output for testing
     print("Extracted Session Data:")

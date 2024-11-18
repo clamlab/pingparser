@@ -29,7 +29,9 @@ class Extractor:
         else:
             extractor = self._extract_v_new
 
-        return extractor(fn, sess_name)
+        sess_stats = {} #holder for per session stats (currently more applicable for events files)
+
+        return extractor(fn, sess_name), sess_stats
 
     def _extract_v_old(self, fn, sess_name):
         # ==== Extract basic response markers ===
