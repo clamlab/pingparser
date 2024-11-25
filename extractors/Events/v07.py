@@ -165,7 +165,7 @@ class Extractor:
         # leading it to sometimes classify the timestamp endings not as the usual .%f)
 
         if pd.isna(df_sess_raw.iloc[-1]['Timestamp']):
-            df_sess_raw.drop(df_sess_raw.index[-1])
+            df_sess_raw = df_sess_raw.drop(df_sess_raw.index[-1])
 
 
         #   instead of one row per trial, it's a single row of session stats

@@ -61,9 +61,9 @@ def setup_paths(config):
             'metadata': os.path.join(versioned_dir, 'metadata'),
         }
 
-        # Add 'big_dfs' path only for 'Events' #we don't really need omnibus table for trackers / file too big
+        # Add 'big_df' path only for 'Events' #we don't really need omnibus table for trackers / file too big
         if e_name == 'Events':
-            for s in ['big_dfs', 'session_stats']:
+            for s in ['big_df', 'session_stats']:
                 paths[s] = os.path.join(versioned_dir, s)
 
 
@@ -226,7 +226,6 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
          ThreadPoolExecutor(max_workers=4) as save_executor:
 
         for anim_name, anim in expt.anim.items():
-            print(anim_name)
             data_dir_anim = os.path.join(data_dir, anim_name)
             # Filter proc_list for this animal's sessions
             anim_proc_list = boo.slice(proc_list, {'anim': [anim_name]})['sess']
@@ -290,7 +289,10 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
 
 
             # === ONLY FOR EVENTS: merge (sameday), then save, session stats ===
-            merged_stats = merge_sameday_stats(subsess_stats)
+            try:
+                merged_stats = merge_sameday_stats(subsess_stats)
+            except:
+                pass
             # Convert dictionary to DataFrame
             session_stats_df = pd.DataFrame.from_dict(merged_stats, orient='index').reset_index()
             session_stats_df.rename(columns={'index': 'date'}, inplace=True)
@@ -421,6 +423,10 @@ def merge_sameday_stats(subsess_stats):
                     merged_dict[stat_name] = []
 
                 merged_dict[stat_name].append(stat_value)
+
+        if len(merged_dict) == 0:
+            continue
+
         earliest =  min(merged_dict['start_time'])
         latest   =  max(merged_dict['end_time'])
         latest_index = merged_dict['end_time'].index(latest) #use for getting latest trialtype on each day
@@ -449,11 +455,28 @@ def load_file_for_omnibus(file_path):
     except pd.errors.EmptyDataError:
         return datetime_str, None
 
+def save_col_types(config, extractors):
+    # save column dtypes of extractor to metadata directory
+    # useful when loading dfs later: newer pandas encourage / force explicit dtypes
+
+    for e_name, e in extractors.items():
+        fn = os.path.join(config['paths'][e_name]['dirs']['metadata'],
+                          'coltypes.csv')
+
+        if os.path.exists(fn):
+            #file already created (should be done on first run)
+            continue
+        else:
+            logging.info(f"Creating {fn}")
+            pd.DataFrame(list(e.COLUMN_DTYPES.items()),
+                         columns=['colname','dtype']).to_csv(fn, index=False)
+
+
 # Merge all sessions to form omnibus df and save in parallel
 def create_omnibus(anim_name, anim, config, e_name):
     # Concatenate the dataframes in the correct order
     big_df = boo.concat_df_dicts(anim.sess, reset_index=True)
-    fn = os.path.join(config['paths'][e_name]['dirs']['big_dfs'], anim_name + '.csv')
+    fn = os.path.join(config['paths'][e_name]['dirs']['big_df'], anim_name + '.csv')
     big_df.to_csv(fn, index=False)
     return anim_name, fn, big_df
 
@@ -477,6 +500,9 @@ def main(config_file, debug=False):
 
         # Load list of already pre-processed sessions
         proc_list = load_processed_list(config)
+
+        # save metadata
+        save_col_types(config, extractors)
 
         # Preprocess sessions, skipping those already in list, and update list
         for e_name in config['extractors']:

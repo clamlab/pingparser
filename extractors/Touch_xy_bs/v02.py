@@ -14,6 +14,12 @@ class Extractor:
     VERSION = "touch_v02"
     DATE = "11.08.23"
     TYPE = 'Touch_xy_bs'
+    COLUMN_DTYPES = {'sess'     : 'object',
+                     'TrialNum' : 'Int64',
+                     'Timestamp': 'object',
+                     'x'        : 'float64',
+                     'y'        : 'float64'}
+
     BONSAI_TIMESTAMP_FMT = "%H:%M:%S.%f"
     DF_TEMPLATE = pd.DataFrame([], columns=['TrialNum','Timestamp','x','y','sess'])
 
