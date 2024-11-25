@@ -63,6 +63,9 @@ class Extractor:
         'Welzl_y': 'float64',
         'WMDelay': 'float64',
         'WMTrial': 'boolean',  # Nullable boolean type
+
+        'sess': 'object',
+        'date': 'object'
     }
 
     RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms']
