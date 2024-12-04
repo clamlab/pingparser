@@ -1,0 +1,43 @@
+
+# Configuration for processing version v05
+
+version: "v08"
+root_dir: "Y:/Edmund/Data/Touchscreen_pSWM/"
+                #script will find look for 
+                #/raw and /processed subfolders here
+
+overwrite: false   
+# overwrite existing processed data (in processed list)
+
+animal_names:
+  - "EC01"
+  - "EC02"
+  - "EC03"
+  - "EC04"
+  - "EC05"
+  - "EC06"
+  - "EC07"
+  - "EC08"
+  - "EC09"
+  - "EC10"
+  - "EC11"
+  - "EC12"
+  - "EC13"
+  - "EC14"
+  - "EC15"
+  - "EC16"
+  - "EC17"
+  - "EC18"
+
+
+
+# Extractor modules and their versions
+extractor_path: "../extractors"
+
+extractors:
+  Events: "v09"
+  Touch_xy_bs:  "v02"
+
+# Cutoff date for processing sessions
+cutoff_min: 
+  default: "1900-01-01"

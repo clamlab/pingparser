@@ -9,8 +9,10 @@ import pingparser.general as genparse
 import pyfun.bamboo as boo
 import pyfun.timestrings as timestr
 import pingparser.runningval as runningval
+import warnings
 
-#three cases:
+
+#variant cases:
 #10.16 -- is_warmup variable introduced (but unused). Can ignore
 #10.22 -- warmup_state: integer which counts number of warmup processes occurring for a given trial.
 #         0 = not warm up trial.
@@ -22,11 +24,29 @@ import pingparser.runningval as runningval
 #push trial params never completes  because optoTrial not received, leading to multiple instances of same variable pushed
 #(number of instances increments by one per trial i.e. on trial 2, 2 pushes, trial 100, 100 pushes :(
 
+#10.26.24 to 11.30.24 (specified in FIXATION_BUG_DATERANGE)
+#FixationEvent and RespEvent were introduced, and e.g. FixationCompleted would fall under these.
+#but because PublishSubj (and not BehSubj) initialized these two variables, only the first multicast instance was pushed.
+#hence missing FixationCompleted etc.
+#we then use other ways to infer:
+#FixationCompleted -- FixationMod_done
+#FixationStarted   -- StimOn;True
+#      for either FixationStarted or StimOn;True--take the last one before FixationMod_done
+#
+#FixationInterrupted --StimOff before FixationMod_done. But delete those that are within 0.01s of each other
+
+
+
+
+
+
+# TODO: for 11/16 and earlier, need to extract CueAlpha_WMOn, and CueAlpha_WMOff manually
+
 
 
 class Extractor:
-    VERSION = "touch_v07"
-    DATE = "11.17.24"
+    VERSION = "touch_v09"
+    DATE = "12.02.24"
     TYPE = 'Events'
     COLUMN_DTYPES = {
         'anchor1_x': 'float64',
@@ -36,6 +56,7 @@ class Extractor:
         'correct': 'boolean',
         'CueAlpha_WMOn': 'float64',
         'CueAlpha_WMOff': 'float64',
+        'CueFadeDur': 'float64',
         'Cue1_x': 'float64',
         'Cue1_y': 'float64',
         'Cue2_x': 'float64',
@@ -47,6 +68,8 @@ class Extractor:
         'CueRel2_x': 'float64',
         'CueRel2_y': 'float64',
         'FixationBreaks': 'Int64',  # Nullable integer type
+        'FixationStarted_time': 'object',
+        'FixationCompleted_time': 'object',
         'FixationDur': 'float64',
         'FixationGraceDur': 'float64',
         'ITI': 'float64',
@@ -70,11 +93,16 @@ class Extractor:
         'date': 'object'
     }
 
-    RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms']
+    RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms',
+                    'CueAlpha_WMOn', 'CueAlpha_WMOff']
 
     LAPSE_LABELS = {'RespMod_elapsed'    : 'resp',
                     'FixationMod_elapsed': 'fixation',
                     'LickMod_elapsed'    : 'lick'}
+
+
+    FIXATION_BUG_DATERANGE = [pd.to_datetime('2024-10-26'), pd.to_datetime('2024-11-30')]
+
 
 
     def __init__(self):
@@ -89,8 +117,6 @@ class Extractor:
     	"""
 
 
-
-
         df_sess_raw = genparse.read_raw(fn)  # Load raw data
         sess_stats = {}
 
@@ -98,7 +124,7 @@ class Extractor:
         if len(df_sess_raw) == 0:
             return pd.DataFrame(), sess_stats
 
-        """
+
         #for some sessions, no value of reward_max_ms was pinged. Hacky way of inserting it
         default_reward = 300 #default value of reward_max_ms (current as of 11.17.24)
 
@@ -113,31 +139,48 @@ class Extractor:
 
                 df_sess_raw = df_sess_raw.sort_index()
 
-        """
 
         # Pre-process the raw session data
         df_sess_raw = self._pre_processor(df_sess_raw)
 
         # === Extract values trial by trial and compile into a list ===
         sess_extracts = []
+
+        # check if sess falls in bugged range
+        bugged_fixation = self.FIXATION_BUG_DATERANGE[0] <= pd.to_datetime(sess_name[0:10]) <= self.FIXATION_BUG_DATERANGE[1]
+
+
         for TrialNum, df_trial in df_sess_raw.groupby('TrialNum'):
-            one_trial = self._trial_summarizer(df_trial)
+            if bugged_fixation:
+                fix_events = self._trial_fixation_events_bugged(df_trial)
+            else:
+                fix_events = self._trial_fixation_events(df_trial)
+
+            one_trial = self._trial_summarizer(df_trial, fix_events)
+
+
             if one_trial is not None:
                 sess_extracts.append(one_trial['val'].tolist())
 
         # Convert list of extracted trials into a DataFrame
         df_sess = pd.DataFrame(sess_extracts, columns=self.COLUMN_DTYPES.keys())
+        df_sess = df_sess.astype(self.COLUMN_DTYPES)
 
         if df_sess.empty:
             return pd.DataFrame(), sess_stats
 
         # === Compute running values for the entire session ===
         running_vals = self._running_valuator(df_sess_raw)
+
+        warnings.simplefilter("error", FutureWarning)
+
         for subj_name, vals in running_vals.items():
             try:
                 df_sess = boo.merge_update(df_sess, vals, subj_name, match_column='TrialNum')
             except KeyError:
                 continue  # Skip if 'TrialNum' does not exist due to empty DataFrame
+            except FutureWarning as fw:
+                pass
 
         # get lapses
         slicer = [['Subject', ['ModOutcome']                                               , '+'],
@@ -219,6 +262,16 @@ class Extractor:
         df = df_sess_raw.copy()
         for r in self.RAW_TO_DELETE:
             df = boo.slice(df, r, '-')
+
+        df['Timestamp'] = df['Timestamp'].apply(lambda x: timestr.parse_time(x))
+        # use custom function instead of pd.to_datetime because the latter cannot handle
+        # multiple formats in the same table (bonsai stupidly rounds off some values
+        # leading it to sometimes classify the timestamp endings not as the usual .%f)
+
+        # sometimes last row can be interrupted upon bonsai termination, mangling the timestamp
+        if pd.isna(df.iloc[-1]['Timestamp']):
+            df = df.drop(df.index[-1])
+
         return df
 
     def _post_processor(self, df):
@@ -245,13 +298,127 @@ class Extractor:
         nonWMs = boo.slice(df, {'TrialType': ['1_PortFix', '2_PortFixCue', '3_WMDist']})
         df.loc[nonWMs.index, 'WMDelay'] = np.nan
 
+        #extract just time from the datetime string
+        try:
+            for t_event in ['FixationStarted_time', 'FixationCompleted_time']:
+                df[t_event] = df[t_event].dt.time
+        except AttributeError:
+            pass
+
         return df
 
     def _running_valuator(self, df_sess_raw):
         """Extract running values."""
         return runningval.get(df_sess_raw, self.RUNNING_VALS, debug=False)
 
-    def _trial_summarizer(self, df_trial):
+
+
+    def _trial_fixation_events(self, df_trial):
+
+        fix_events = {'FixationStarted_time'  : None,
+                      'FixationCompleted_time': None}
+
+
+        # count number of fixation breakings
+        n_fix_breaks = len(boo.slice(df_trial, {'Value': ['FixationInterrupted']}))
+        fix_events['FixationBreaks'] = n_fix_breaks
+
+        fix_complete = boo.slice(df_trial, {'Value': ['FixationCompleted']}, '+')  # index where InTimerCompleted
+        if len(fix_complete) == 0:
+            # no fixation completed
+            fix_events['fixated_row'] = df_trial.index[-1]  # just set to last row in trial
+            return fix_events #no fixation start time nor end time
+        else:
+            # save row number, for finding parameters centered around fixation complete
+            # e.g. cue position, while discarding stimulus parameters occurring for broken fixations
+
+            #take the first FixationCompleted. Should only be one! but just in case
+            fix_events['fixated_row'] = fix_complete.index[0]
+            fix_events['FixationCompleted_time'] = fix_complete.Timestamp.iloc[0]
+
+            #find fixation start time
+            try:
+                # take the last instance of fixation started
+                fix_events['FixationStarted_time'] = boo.slice(df_trial, {'Value': ['FixationStarted']})['Timestamp'].iloc[-1]
+            except IndexError:  # happens if no FixationStarted found
+                raise ValueError('FixationCompleted without FixationStarted')
+                # TODO: set error in logger
+
+
+            return fix_events
+
+
+
+    def _trial_fixation_events_bugged(self, df_trial):
+
+        fix_events = {'FixationStarted_time'  : None,
+                      'FixationCompleted_time': None,
+                      'FixationBreaks':         0}
+
+
+
+        try:
+            fixmod_row = boo.slice(df_trial, {'Value':['FixationMod_on']}).index[0]
+        except IndexError:
+            fix_events['fixated_row'] = df_trial.index[-1]
+            #no fixation mod activated
+            return fix_events
+
+        slicer = [['Subject', ['StimOn'], '+'],
+                  ['Value'  , ['False' ], '+']]
+        StimOn_Falses = boo.chainslice(df_trial, slicer)
+
+
+        slicer = [['Subject', ['StimOn'], '+'],
+                  ['Value'  , ['True'  ], '+']]
+        StimOn_Trues  = boo.chainslice(df_trial, slicer)
+
+
+        fix_complete = boo.slice(df_trial, {'Value': ['FixationMod_done']}, '+')  # index where InTimerCompleted
+        if len(fix_complete) == 0:
+            # no fixation completed
+            fix_events['fixated_row'] = df_trial.index[-1]  # just set to last row in trial
+        else:
+            # save row number, for finding parameters centered around fixation complete
+            # e.g. cue position, while discarding stimulus parameters occurring for broken fixations
+
+            #take the first FixationCompleted. Should only be one! but just in case
+            fix_events['fixated_row'] = fix_complete.index[0]
+            fix_events['FixationCompleted_time'] = fix_complete.Timestamp.iloc[0]
+
+
+            #find fixation start time
+            try:
+                # take the last instance of fixation started
+                # TODO: fix clunkiness
+                t = StimOn_Trues[StimOn_Trues.index < fix_events['fixated_row']]['Timestamp'].iloc[-1]
+                fix_events['FixationStarted_time'] = t
+            except IndexError:  # happens if no FixationStarted found
+                raise ValueError('FixationCompleted without FixationStarted')
+                # TODO: set error in logger
+
+        # count number of fixation breakings
+        # by taking StimOn_Falses that occur during Fixation mod rows
+
+        fix_breaks = StimOn_Falses[ (StimOn_Falses.index >= fixmod_row)
+                                  & (StimOn_Falses.index <= fix_events['fixated_row']) ]
+
+
+        if len(fix_breaks) > 1:
+            fix_breaks.loc[:,'Timestamp'] = pd.to_datetime(fix_breaks['Timestamp'], format='%H:%M:%S.%f')
+
+            # Calculate time differences between consecutive rows
+            time_diff = fix_breaks['Timestamp'].diff().dt.total_seconds()
+            duplicates = len(time_diff[time_diff < 0.02])
+            fix_events['FixationBreaks'] = len(fix_breaks) - duplicates
+
+
+
+        return fix_events
+
+
+
+    def _trial_summarizer(self, df_trial, fix_events):
         """
     	df_trial: df containing all events restricted to a single trial.
     	return crucial trial info as a single row
@@ -261,13 +428,17 @@ class Extractor:
         row_holder = self.row_holder_template.copy() #.copy() here is deep copy by default
         row_holder.loc['TrialNum', 'val'] = df_trial['TrialNum'].iloc[0]
 
+        #get fixation information
+        fixated_row = fix_events['fixated_row']
+        del fix_events['fixated_row']
+
+        for fix_event_name, val in fix_events.items():
+            row_holder.loc[fix_event_name, 'val'] = val
+
+
         # calculate trial duration
         trial_dur = self._calc_trial_dur(df_trial)
         row_holder.loc['TrialDur', 'val'] = trial_dur
-
-        # count number of fixation breakings
-        n_fix_breaks = len(boo.slice(df_trial, {'Value': ['FixationInterrupted']}))
-        row_holder.loc['FixationBreaks', 'val'] = n_fix_breaks
 
         #check if response was correct
         if 'LickMod_on' in df_trial['Value'].values:
@@ -277,15 +448,7 @@ class Extractor:
         row_holder.loc['correct', 'val'] = correct
 
 
-        # find fixation completed event
-        fixated = boo.slice(df_trial, {'Value': ['FixationCompleted']}, '+') # index where InTimerCompleted
-        if len(fixated) == 0:
-            #no fixation completed
-            fixated_row = df_trial.index[-1] #just set to last row in trial
-        else:
-            # save row number, for finding parameters centered around fixation complete
-            # e.g. cue position, while discarding stimulus parameters occurring for broken fixations
-            fixated_row = fixated.index[0]
+
 
         # === Extract trial individual params ===
         for param in ['ITI', 'RespError_cuefrac']:
@@ -301,8 +464,11 @@ class Extractor:
             xy = genparse.str_to_list(xy_str) if xy_str else (None, None)
             row_holder.loc[xy_param + '_x'], row_holder.loc[xy_param + '_y'] = xy
 
-        for param in ['RespBox_type', 'WMTrial', 'optoTrial']:
+        for param in ['RespBox_type']:
             row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='string', single='last')
+
+        for param in ['WMTrial', 'optoTrial']:
+            row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='boolean', single='last')
 
         for param, prefix in zip(['Cue_xy', 'anchor_xy', 'Cue_xyRel'], ['Cue', 'anchor', 'CueRel']):
             param_prepost = genparse.closest_to_row(df_trial, param, fixated_row)
@@ -327,6 +493,9 @@ if __name__ == "__main__":
     files = {'2024-10-20T10_40_14': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_10_20-10_40/results_2024-10-20T10_40_14/Events.csv",
              '2024-11-08T10_25_52': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC06/2024_11_08-10_25/results_2024-11-08T10_25_52/Events.csv"}
 
+    files = {"2024-11-16T10_52_34": "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_11_16-10_52/results_2024-11-16T10_52_34/Events.csv"}
+    files = {'2024-10-20T10_40_14': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_10_20-10_40/results_2024-10-20T10_40_14/Events.csv"}
+
     for subsess_name, fn in files.items():
 
         # Check if the file exists
@@ -338,8 +507,8 @@ if __name__ == "__main__":
         extractor = Extractor()
 
         # Run the extraction process on the test data
-        df_sess = extractor.extract(fn, subsess_name)
+        df_sess, sess_stats = extractor.extract(fn, subsess_name)
 
-    # Print or display the output for testing
-    print("Extracted Session Data:")
-    print(df_sess)
+        # Print or display the output for testing
+        print("Extracted Session Data:")
+        print(df_sess)

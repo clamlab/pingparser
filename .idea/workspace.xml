@@ -1,7 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="3c071ea5-2532-4db3-9a35-7c7989ff93f5" name="Changes" comment="" />
+    <list default="true" id="6d771f61-75a7-46ef-a10e-a63423c3bf19" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../DailyDataView/.idea/DailyDataView.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../DailyDataView/.idea/DailyDataView.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DailyDataView/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../DailyDataView/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../DailyDataView/src/processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/../DailyDataView/src/processor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/channel maps/Cambridge Neuro H9/.ipynb_checkpoints/create channel map for kilosort-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/channel maps/Cambridge Neuro H9/.ipynb_checkpoints/create channel map for kilosort-checkpoint.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/channel maps/Cambridge Neuro H9/create channel map for kilosort.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/channel maps/Cambridge Neuro H9/create channel map for kilosort.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/kilosort scripts/kilosort 2/ks2_main.m" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/kilosort scripts/kilosort 2/ks2_main.m" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/kilosort scripts/kilosort 25/ks25_main.asv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/kilosort scripts/kilosort 25/ks25_main.m" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/kilosort scripts/kilosort 25/ks25_main.m" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../ephys/phystools/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../ephys/phystools/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/.ipynb_checkpoints/Lorena old -checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/.ipynb_checkpoints/Lorena old -checkpoint.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/.ipynb_checkpoints/Lorena sandbox v04-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/.ipynb_checkpoints/Lorena sandbox v04-checkpoint.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/.ipynb_checkpoints/permutation sim test-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/.ipynb_checkpoints/permutation sim test-checkpoint.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/extractor.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/extractor.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/foo.csv" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/foo.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/pruners.py" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/pruners.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Lorena/synctools.py" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Lorena/synctools.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/.ipynb_checkpoints/sandbox v02-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Touch/.ipynb_checkpoints/sandbox v02-checkpoint.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/.ipynb_checkpoints/sandbox v04-checkpoint.ipynb" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/.ipynb_checkpoints/sandbox-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Touch/.ipynb_checkpoints/sandbox-checkpoint.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/foo.csv" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Touch/foo.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/sandbox v07 touch.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Touch/sandbox v07 touch.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/sandbox v08 for Lida.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Touch/sandbox v08 for Lida.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../pSWM/Touch/sandbox.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/../pSWM/Touch/sandbox.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../panplots/plotters.py" beforeDir="false" afterPath="$PROJECT_DIR$/../panplots/plotters.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/pingparser.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/pingparser.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dailyautoproc/autoproc.py" beforeDir="false" afterPath="$PROJECT_DIR$/dailyautoproc/autoproc.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/extractors/Events/v07.py" beforeDir="false" afterPath="$PROJECT_DIR$/extractors/Events/v07.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/general.py" beforeDir="false" afterPath="$PROJECT_DIR$/general.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -17,25 +56,116 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="MarkdownSettingsMigration">
-    <option name="stateVersion" value="1" />
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;edmundchong&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/clamlab/pingparser.git&quot;,
+    &quot;accountId&quot;: &quot;e2b935f2-56cf-4bb2-a217-aec80785b0e8&quot;
+  }
+}</component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/../.venv/Lib/site-packages/pandas/core/indexes/base.py" root0="SKIP_INSPECTION" />
   </component>
-  <component name="ProjectId" id="2MhKZ8XvtzVcsSaa7wcUfUiGmSI" />
-  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 2
+}</component>
+  <component name="ProjectId" id="2npilOWS7D0Enogyb6XYlw4wom2" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="1" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.__init__.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.autoproc.executor&quot;: &quot;Run&quot;,
+    &quot;Python.autoproc_debug.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.bamboo.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.general.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.touch_v05.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.v02.executor&quot;: &quot;Run&quot;,
+    &quot;Python.v06.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.v07.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.v08.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.v09.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/clamlab/pingparser/dailyautoproc/configs&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="D:\clamlab\pingparser\dailyautoproc\configs" />
+      <recent name="D:\clamlab\pingparser\extractors\Events" />
+      <recent name="D:\clamlab\pingparser\extractors\Touch_xy_bs" />
+      <recent name="D:\clamlab\pingparser\extractors\events" />
+      <recent name="D:\clamlab\pingparser\extractors\touchscreen" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="D:\clamlab\pingparser\extractors\lorena" />
+      <recent name="D:\clamlab\pingparser\extractors\touchscreen" />
+      <recent name="D:\clamlab\pingparser\extractors" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23339.19" />
+        <option value="bundled-python-sdk-0029f7779945-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23339.19" />
+      </set>
+    </attachedChunks>
+  </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
-      <changelist id="3c071ea5-2532-4db3-9a35-7c7989ff93f5" name="Changes" comment="" />
-      <created>1678214427077</created>
+      <changelist id="6d771f61-75a7-46ef-a10e-a63423c3bf19" name="Changes" comment="" />
+      <created>1729676569342</created>
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
-      <updated>1678214427077</updated>
+      <updated>1729676569342</updated>
+      <workItem from="1729676570866" duration="240000" />
+      <workItem from="1729676820553" duration="1080000" />
+      <workItem from="1729678090181" duration="44000" />
+      <workItem from="1729678139397" duration="29480000" />
+      <workItem from="1729735711787" duration="3017000" />
+      <workItem from="1729762948397" duration="556000" />
+      <workItem from="1729763531817" duration="37000" />
+      <workItem from="1729763668498" duration="1000" />
+      <workItem from="1729781727904" duration="74407000" />
+      <workItem from="1730409727495" duration="14991000" />
+      <workItem from="1730756073487" duration="56465000" />
+      <workItem from="1731418275380" duration="38462000" />
+      <workItem from="1731594665260" duration="34862000" />
+      <workItem from="1731763291085" duration="2152000" />
+      <workItem from="1731778511033" duration="24538000" />
+      <workItem from="1731926080044" duration="15728000" />
+      <workItem from="1731950762224" duration="4824000" />
+      <workItem from="1732535408555" duration="157000" />
+      <workItem from="1732553255141" duration="1631000" />
+      <workItem from="1732555846480" duration="398000" />
+      <workItem from="1732631794922" duration="6267000" />
+      <workItem from="1732720378105" duration="60769000" />
+      <workItem from="1733330067245" duration="3482000" />
     </task>
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
@@ -47,5 +177,56 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/extractors/Events/v05.py</url>
+          <line>193</line>
+          <option name="timeStamp" value="12" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/extractors/Events/v06.py</url>
+          <line>242</line>
+          <option name="timeStamp" value="54" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/extractors/Events/v06.py</url>
+          <line>226</line>
+          <option name="timeStamp" value="67" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/extractors/Events/v08.py</url>
+          <line>124</line>
+          <option name="timeStamp" value="92" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/extractors/Events/v09.py</url>
+          <line>191</line>
+          <option name="timeStamp" value="144" />
+        </line-breakpoint>
+      </breakpoints>
+      <default-breakpoints>
+        <breakpoint type="python-exception">
+          <properties notifyOnTerminate="true" exception="BaseException">
+            <option name="notifyOnTerminate" value="true" />
+          </properties>
+        </breakpoint>
+      </default-breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/pingparser$v08.coverage" NAME="v08 Coverage Results" MODIFIED="1732894655537" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors/Events" />
+    <SUITE FILE_PATH="coverage/pingparser$general.coverage" NAME="general Coverage Results" MODIFIED="1730906480336" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pingparser$v02.coverage" NAME="v02 Coverage Results" MODIFIED="1731949699890" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors/Touch_xy_bs" />
+    <SUITE FILE_PATH="coverage/pingparser$autoproc.coverage" NAME="autoproc Coverage Results" MODIFIED="1733330174948" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/dailyautoproc" />
+    <SUITE FILE_PATH="coverage/pingparser$touch_v05.coverage" NAME="touch_v05 Coverage Results" MODIFIED="1730052213480" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors/events" />
+    <SUITE FILE_PATH="coverage/pingparser$v09.coverage" NAME="v09 Coverage Results" MODIFIED="1733322552298" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors/Events" />
+    <SUITE FILE_PATH="coverage/pingparser$autoproc_debug.coverage" NAME="autoproc_debug Coverage Results" MODIFIED="1733150265651" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="D:\clamlab\pingparser\dailyautoproc" />
+    <SUITE FILE_PATH="coverage/pingparser$v07.coverage" NAME="v07 Coverage Results" MODIFIED="1731861826128" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors/Events" />
+    <SUITE FILE_PATH="coverage/pingparser$bamboo.coverage" NAME="bamboo Coverage Results" MODIFIED="1733185220158" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/../pyfun" />
+    <SUITE FILE_PATH="coverage/pingparser$v06.coverage" NAME="v06 Coverage Results" MODIFIED="1730906743536" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors/Events" />
+    <SUITE FILE_PATH="coverage/pingparser$__init__.coverage" NAME="__init__ Coverage Results" MODIFIED="1729680578852" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/extractors" />
   </component>
 </project>

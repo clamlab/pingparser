@@ -23,10 +23,13 @@ import pingparser.runningval as runningval
 #(number of instances increments by one per trial i.e. on trial 2, 2 pushes, trial 100, 100 pushes :(
 
 
+# TODO: for 11/16 and earlier, need to extract CueAlpha_WMOn, and CueAlpha_WMOff manually
+
+
 
 class Extractor:
-    VERSION = "touch_v07"
-    DATE = "11.17.24"
+    VERSION = "touch_v08"
+    DATE = "11.29.24"
     TYPE = 'Events'
     COLUMN_DTYPES = {
         'anchor1_x': 'float64',
@@ -70,7 +73,8 @@ class Extractor:
         'date': 'object'
     }
 
-    RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms']
+    RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms',
+                    'CueAlpha_WMOn', 'CueAlpha_WMOff']
 
     LAPSE_LABELS = {'RespMod_elapsed'    : 'resp',
                     'FixationMod_elapsed': 'fixation',
@@ -89,8 +93,6 @@ class Extractor:
     	"""
 
 
-
-
         df_sess_raw = genparse.read_raw(fn)  # Load raw data
         sess_stats = {}
 
@@ -98,7 +100,7 @@ class Extractor:
         if len(df_sess_raw) == 0:
             return pd.DataFrame(), sess_stats
 
-        """
+
         #for some sessions, no value of reward_max_ms was pinged. Hacky way of inserting it
         default_reward = 300 #default value of reward_max_ms (current as of 11.17.24)
 
@@ -113,7 +115,6 @@ class Extractor:
 
                 df_sess_raw = df_sess_raw.sort_index()
 
-        """
 
         # Pre-process the raw session data
         df_sess_raw = self._pre_processor(df_sess_raw)
@@ -327,6 +328,9 @@ if __name__ == "__main__":
     files = {'2024-10-20T10_40_14': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_10_20-10_40/results_2024-10-20T10_40_14/Events.csv",
              '2024-11-08T10_25_52': "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC06/2024_11_08-10_25/results_2024-11-08T10_25_52/Events.csv"}
 
+    files = {"2024-11-16T10_52_34": "Y:/Edmund/Data/Touchscreen_pSWM/raw/EC05/2024_11_16-10_52/results_2024-11-16T10_52_34/Events.csv"}
+
+
     for subsess_name, fn in files.items():
 
         # Check if the file exists
@@ -338,8 +342,8 @@ if __name__ == "__main__":
         extractor = Extractor()
 
         # Run the extraction process on the test data
-        df_sess = extractor.extract(fn, subsess_name)
+        df_sess, sess_stats = extractor.extract(fn, subsess_name)
 
-    # Print or display the output for testing
-    print("Extracted Session Data:")
-    print(df_sess)
+        # Print or display the output for testing
+        print("Extracted Session Data:")
+        print(df_sess)

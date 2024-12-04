@@ -504,6 +504,8 @@ def main(config_file, debug=False):
         # save metadata
         save_col_types(config, extractors)
 
+
+
         # Preprocess sessions, skipping those already in list, and update list
         for e_name in config['extractors']:
             logging.info(f"Processing {e_name}")
@@ -516,8 +518,6 @@ def main(config_file, debug=False):
 
         # pull other metadata e.g. start and end time of session (across sub-sessions)
         # TODO: refactor as extractor? (but we don't need to save subsession info and may be overkill because the data format may be too sparse)
-        pass
-
 
 
         # reconstruct each subject's overall Events table. hacky for now,
@@ -606,7 +606,7 @@ if __name__ == "__main__":
 
 
     # Default config file for debugging
-    default_config_path = 'configs/config_v06.yaml'
+    default_config_path = 'configs/config_v08.yaml'
 
     parser = argparse.ArgumentParser(description='Run auto processing with configuration.')
     parser.add_argument('--config', type=str, default=default_config_path, help='Path to the config file')

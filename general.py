@@ -127,7 +127,8 @@ def get_trial_param(df_trial, param, dtype, single):
             matches = [float(s) for s in matches]
         elif dtype == 'int':
             matches = [int(s) for s in matches]
-
+        elif dtype == 'boolean': #nullable boolean for df later
+            matches = [True if x == 'True' else False if x == 'False' else None for x in matches]
 
         if len(matches) == 1:
             return matches[0]
