@@ -108,10 +108,6 @@ def setup_logging(config, debug):
     )
 
 
-
-
-
-
 def init_containers(config):
     expt = containers.Experiment()
     expt.data_root = config['raw_dir']

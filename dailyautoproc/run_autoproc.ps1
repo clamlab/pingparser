@@ -2,7 +2,7 @@
 $baseDir = "D:\clamlab"
 $venvDir = "$baseDir\.venv\Scripts"
 $pythonScript = "$baseDir\pingparser\dailyautoproc\autoproc.py"
-$configPath = "$baseDir\pingparser\dailyautoproc\configs\config_v06.yaml"
+$configPath = "$baseDir\pingparser\dailyautoproc\configs\config_v08.yaml"
 
 # Change to the base directory
 cd $baseDir

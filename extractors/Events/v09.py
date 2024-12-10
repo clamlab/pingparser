@@ -68,8 +68,8 @@ class Extractor:
         'CueRel2_x': 'float64',
         'CueRel2_y': 'float64',
         'FixationBreaks': 'Int64',  # Nullable integer type
-        'FixationStarted_time': 'object',
-        'FixationCompleted_time': 'object',
+        'FixationStarted_time': 'datetime64[ns]',
+        'FixationCompleted_time': 'datetime64[ns]',
         'FixationDur': 'float64',
         'FixationGraceDur': 'float64',
         'ITI': 'float64',
@@ -207,13 +207,6 @@ class Extractor:
 
         # === get per-session data ===
 
-        df_sess_raw['Timestamp'] = df_sess_raw['Timestamp'].apply(lambda x: timestr.parse_time(x))
-        # use custom function instead of pd.to_datetime because the latter cannot handle
-        # multiple formats in the same table (bonsai stupidly rounds off some values
-        # leading it to sometimes classify the timestamp endings not as the usual .%f)
-
-        if pd.isna(df_sess_raw.iloc[-1]['Timestamp']):
-            df_sess_raw = df_sess_raw.drop(df_sess_raw.index[-1])
 
 
         #   instead of one row per trial, it's a single row of session stats
@@ -263,10 +256,12 @@ class Extractor:
         for r in self.RAW_TO_DELETE:
             df = boo.slice(df, r, '-')
 
+
         df['Timestamp'] = df['Timestamp'].apply(lambda x: timestr.parse_time(x))
         # use custom function instead of pd.to_datetime because the latter cannot handle
         # multiple formats in the same table (bonsai stupidly rounds off some values
         # leading it to sometimes classify the timestamp endings not as the usual .%f)
+
 
         # sometimes last row can be interrupted upon bonsai termination, mangling the timestamp
         if pd.isna(df.iloc[-1]['Timestamp']):
@@ -278,12 +273,16 @@ class Extractor:
 
         #1. create variable for CueMove
         df['CueMove'] = (df['Cue1_x'] != df['Cue2_x']) | (df['Cue1_y'] != df['Cue2_y'])
+
+
         #2. convert WMTrial variable from string to boolean
-        df['WMTrial'] = df['WMTrial'] == 'True'
+        #df['WMTrial'] = df['WMTrial'] == 'True'
 
         #3. typecast
+        # TODO: figure out why still need this after the column types are defined already
         for subj in ['WMDelay', 'Cue_D']:
             df[subj] = df[subj].astype('float')
+
 
         #4. remove trial 0
         df = boo.slice(df, {'TrialNum': [0]}, '-')
@@ -302,8 +301,8 @@ class Extractor:
         try:
             for t_event in ['FixationStarted_time', 'FixationCompleted_time']:
                 df[t_event] = df[t_event].dt.time
-        except AttributeError:
-            pass
+        except AttributeError as e:
+            logging.warning(f"{df['sess']} timestamp: e")
 
         return df
 
@@ -355,8 +354,6 @@ class Extractor:
                       'FixationCompleted_time': None,
                       'FixationBreaks':         0}
 
-
-
         try:
             fixmod_row = boo.slice(df_trial, {'Value':['FixationMod_on']}).index[0]
         except IndexError:
@@ -396,6 +393,8 @@ class Extractor:
             except IndexError:  # happens if no FixationStarted found
                 raise ValueError('FixationCompleted without FixationStarted')
                 # TODO: set error in logger
+            except AttributeError:
+                pass
 
         # count number of fixation breakings
         # by taking StimOn_Falses that occur during Fixation mod rows
@@ -448,10 +447,8 @@ class Extractor:
         row_holder.loc['correct', 'val'] = correct
 
 
-
-
         # === Extract trial individual params ===
-        for param in ['ITI', 'RespError_cuefrac']:
+        for param in ['ITI', 'RespError_cuefrac', 'CueFadeDur']:
             row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='strict')
         for param in ['Welzl_D', 'FixationGraceDur']:
             row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='last')
