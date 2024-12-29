@@ -457,15 +457,16 @@ def save_col_types(config, extractors):
 
     for e_name, e in extractors.items():
         fn = os.path.join(config['paths'][e_name]['dirs']['metadata'],
-                          'coltypes.csv')
+                          'coltypes.yaml')
 
         if os.path.exists(fn):
             #file already created (should be done on first run)
             continue
         else:
             logging.info(f"Creating {fn}")
-            pd.DataFrame(list(e.COLUMN_DTYPES.items()),
-                         columns=['colname','dtype']).to_csv(fn, index=False)
+
+            with open(fn, 'w') as f:
+                yaml.dump(e.COLUMN_DTYPES, f, default_flow_style=False)
 
 
 # Merge all sessions to form omnibus df and save in parallel
