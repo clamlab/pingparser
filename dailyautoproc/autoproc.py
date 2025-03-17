@@ -451,7 +451,7 @@ def load_file_for_omnibus(file_path):
     except pd.errors.EmptyDataError:
         return datetime_str, None
 
-def save_col_types(config, extractors):
+def save_col_types(config, extractors, overwrite=True):
     # save column dtypes of extractor to metadata directory
     # useful when loading dfs later: newer pandas encourage / force explicit dtypes
 
@@ -460,13 +460,17 @@ def save_col_types(config, extractors):
                           'coltypes.yaml')
 
         if os.path.exists(fn):
-            #file already created (should be done on first run)
-            continue
+            if overwrite:
+                logging.info(f"Overwriting {fn}")
+                pass
+            else:
+                #file already created (should be done on first run)
+                continue
         else:
             logging.info(f"Creating {fn}")
 
-            with open(fn, 'w') as f:
-                yaml.dump(e.COLUMN_DTYPES, f, default_flow_style=False)
+        with open(fn, 'w') as f:
+            yaml.dump(e.COLUMN_DTYPES, f, default_flow_style=False)
 
 
 # Merge all sessions to form omnibus df and save in parallel
@@ -499,7 +503,7 @@ def main(config_file, debug=False):
         proc_list = load_processed_list(config)
 
         # save metadata
-        save_col_types(config, extractors)
+        save_col_types(config, extractors, overwrite=True)
 
 
 

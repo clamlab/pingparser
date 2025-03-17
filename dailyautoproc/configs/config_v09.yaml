@@ -1,7 +1,7 @@
 
 # Configuration for processing version v05
 
-version: "v08"
+version: "v09"
 root_dir: "Y:/Edmund/Data/Touchscreen_pSWM/"
                 #script will find look for 
                 #/raw and /processed subfolders here

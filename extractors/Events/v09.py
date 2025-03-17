@@ -68,8 +68,8 @@ class Extractor:
         'CueRel2_x': 'float64',
         'CueRel2_y': 'float64',
         'FixationBreaks': 'Int64',  # Nullable integer type
-        'FixationStarted_time': 'datetime64[ns]',
-        'FixationCompleted_time': 'datetime64[ns]',
+        'FixationStarted_time': 'object',
+        'FixationCompleted_time': 'object',
         'FixationDur': 'float64',
         'FixationGraceDur': 'float64',
         'ITI': 'float64',
@@ -93,6 +93,27 @@ class Extractor:
         'date': 'object'
     }
 
+    KEY_RESULT_NAME = {
+        "0_Port": None,
+        "1_RandomSnout": None,
+        "2_FixSnoutOnly": None,
+        "3_FixShrink": 'snout_x_min',
+        "4_FixCue": None,
+        "5_FixCueShrink": 'Cue_D',
+        "5b_FixCueStairs": 'Cue_D',
+        "6_FullscreenResp": None,
+        "7_FixDur": 'FixationDur',
+        "8_Stick": None,
+        "9_WM0": 'RespError_cuefrac',
+        "10_WM3": 'RespError_cuefrac',
+        "11_WM3_alphaStep": 'CueAlpha_WMOn',
+        "12_WM3_alphaSlope": 'CueAlpha_WMOff',
+        "13_WMx_alphaStep": 'RespError_cuefrac',
+        "14_WMx_alphaSlope": 'RespError_cuefrac'
+    }
+
+
+
     RUNNING_VALS = ['Cue_D', 'FixationDur', 'TrialType', 'RespPause', 'WMDelay', 'reward_max_ms',
                     'CueAlpha_WMOn', 'CueAlpha_WMOff']
 
@@ -102,6 +123,9 @@ class Extractor:
 
 
     FIXATION_BUG_DATERANGE = [pd.to_datetime('2024-10-26'), pd.to_datetime('2024-11-30')]
+
+
+
 
 
 
@@ -207,8 +231,6 @@ class Extractor:
 
         # === get per-session data ===
 
-
-
         #   instead of one row per trial, it's a single row of session stats
 
         #  session start and end times
@@ -302,7 +324,9 @@ class Extractor:
             for t_event in ['FixationStarted_time', 'FixationCompleted_time']:
                 df[t_event] = df[t_event].dt.time
         except AttributeError as e:
-            logging.warning(f"{df['sess']} timestamp: e")
+            # TODO: allow logger
+            #logging.warning(f"{df[t_event]} timestamp: e")
+            pass
 
         return df
 
