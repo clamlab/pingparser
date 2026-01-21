@@ -48,8 +48,7 @@ class Extractor:
     VERSION = "touch_v09"
     DATE = "12.02.24"
     TYPE = 'Events'
-    EXPT = 'Stick'
-
+    EXPT_NAME = 'Stick'
     COLUMN_DTYPES = {
         'anchor1_x': 'float64',
         'anchor1_y': 'float64',
@@ -94,8 +93,18 @@ class Extractor:
         'date': 'object'
     }
 
-
-
+    SESS_STATS_DTYPES = {
+        'start_time': 'string',
+        'end_time': 'string',
+        'last_TrialType': 'string',
+        'n_correct': 'Int64',  # Nullable integer
+        'n_attempted': 'Int64',
+        'n_total': 'Int64',
+        'total_milk_ul': 'float64',  # Already supports NaN
+        'rig': 'object',
+        'shift': 'Int64',
+        'food': 'float64'
+    }
 
     KEY_RESULT_NAME = {
         "0_Port": None,
@@ -224,6 +233,10 @@ class Extractor:
                 # last trial can be cut off at various points when experiment ends,
                 # either ignore for now or analyse further
 
+        # calculate trial start and ends
+        df_trialstarts = boo.slice(df_sess_raw, {'Subject': ['Trial_started']})
+        df_trialends   = boo.slice(df_sess_raw, {'Subject': ['Trial_ended']})
+
 
         # Add session identifier
         df_sess['sess'] = sess_name
@@ -250,16 +263,23 @@ class Extractor:
         for t in ['start_time', 'end_time']:
             sess_stats[t] = sess_stats[t]
 
-        try:
-            sess_stats['last_TrialType'] = df_sess['TrialType'].iloc[-1]
-        except IndexError:
-            sess_stats['last_TrialType'] = None
+        sess_stats['last_TrialType'] = df_sess['TrialType'].iloc[-1]
 
         sess_stats['n_correct']   = df_sess['correct'].sum()
         sess_stats['n_attempted'] = df_sess['lapse_type'].isna().sum() # TODO: handle last trial gracefully
         sess_stats['n_attempted'] = max(sess_stats['n_correct'], sess_stats['n_attempted']) #TODO-- really hacky!!
                                     #problem is how to handle last trial.
         sess_stats['n_total']     = df_sess.TrialNum.max() #TODO: handle last trial gracefully
+
+        # total milk ul
+        try:
+            total_milk_ul = boo.slice(df_sess_raw, {'Subject': ['total_milk_ul']}).iloc[-1]['Value']
+            total_milk_ul = float(total_milk_ul)
+        except IndexError:
+            total_milk_ul = float(0)
+
+        sess_stats['total_milk_ul'] = total_milk_ul
+
 
 
         return df_sess, sess_stats

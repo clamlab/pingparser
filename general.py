@@ -122,13 +122,15 @@ def get_trial_param(df_trial, param, dtype, single):
         return None
     elif len(matches) > 0:
         #=== type conversion ===
-        #if no conversion, it remains as string
         if dtype == 'float':
             matches = [float(s) for s in matches]
         elif dtype == 'int':
             matches = [int(s) for s in matches]
         elif dtype == 'boolean': #nullable boolean for df later
             matches = [True if x == 'True' else False if x == 'False' else None for x in matches]
+        elif dtype == 'str':
+            pass #str to begin with
+        # (if no conversion specified, it remains as string)
 
         if len(matches) == 1:
             return matches[0]
@@ -145,31 +147,37 @@ def get_trial_param(df_trial, param, dtype, single):
 def closest_to_row(df, param_name, target_row, neighbors="pre_post"):
     """
     given a target_row, return values (list) of a param (param_name) that occurred closest to it.
-    can return just the closest value before target_row,
-         or additionally closest value after target_row,
+    change neighbors setting:
+    pre_post: returns both the closest value before, and closest value after target row
+    pre     : returns just the closest value before target_row,
 
     Useful when different stimuli presented to a trial e.g. when subject restarts fixation,
     and only want to extract the stimulus parameters around successful fixation.
 
-    TODO: set condition for pre only
+
     """
 
     matches = boo.slice(df, {'Subject': [param_name]})
     matches.index = matches.index - target_row
 
-
     pre = matches.index[matches.index < 0].max()
     post = matches.index[matches.index > 0].min()
 
     val_all = []
-    for loc in [pre, post]:
+    if neighbors == 'pre_post':
+        matches_search = [pre, post]
+    elif neighbors == 'pre':
+        matches_search = [pre]
+
+    for loc in matches_search:
         if np.isnan(loc):
             val_all.append(None)
         else:
             val_all.append(matches.loc[loc, 'Value'])
 
-    if val_all[1] is None:
-        val_all[1] = val_all[0] #param did not change
+    if neighbors == 'pre_post':
+        if val_all[1] is None:
+            val_all[1] = val_all[0] #param did not change
 
     return val_all
 

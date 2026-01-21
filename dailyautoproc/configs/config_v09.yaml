@@ -1,6 +1,3 @@
-
-# Configuration for processing version v05
-
 version: "v09"
 root_dir: "Y:/Edmund/Data/Touchscreen_pSWM/"
                 #script will find look for 
@@ -9,51 +6,66 @@ root_dir: "Y:/Edmund/Data/Touchscreen_pSWM/"
 overwrite: false   
 # overwrite existing processed data (in processed list)
 
-animal_names:
-  - "EC01"
-  - "EC02"
-  - "EC03"
-  - "EC04"
-  - "EC05"
-  - "EC06"
-  - "EC07"
-  - "EC08"
-  - "EC09"
-  - "EC10"
-  - "EC11"
-  - "EC12"
-  - "EC13"
-  - "EC14"
-  - "EC15"
-  - "EC16"
-  - "EC17"
-  - "EC18"
-  - "EC19"
-  - "EC20"
-  - "EC21"
-  - "EC22"
-  - "EC23"
-  - "EC24"
-  - "EC25"
-  - "EC26"
-  - "EC27"
-  - "EC28"
-  - "EC29"
-  - "EC30"
-  - "EC31"
-  - "EC32"
-  - "EC33"
-  - "EC34"
-
+animals:
+  Stick:
+    - "EC01"
+    - "EC02"
+    - "EC03"
+    - "EC04"
+    - "EC05"
+    - "EC06"
+    - "EC07"
+    - "EC08"
+    - "EC09"
+    - "EC10"
+    - "EC11"
+    - "EC12"
+    - "EC13"
+    - "EC14"
+    - "EC15"
+    - "EC16"
+    - "EC17"
+    - "EC18"
+    - "EC19"
+    - "EC20"
+    - "EC21"
+    - "EC22"
+  Grid:
+    - "EC23"
+    - "EC24"
+    - "EC25"
+    - "EC26"
+    - "EC27"
+    - "EC28"
+    - "EC29"
+    - "EC30"
+    - "EC31"
+    - "EC32"
+    - "EC33"
+    - "EC34"
+    - "EC35"
+    - "EC36"
+    - "EC37"
+    - "EC38"
+    - "EC39"
+    - "EC40"
+    - "EC41"
+    - "EC42"
 
 
 # Extractor modules and their versions
 extractor_path: "../extractors"
 
-extractors:
-  Events: "v09"
-  Touch_xy_bs:  "v02"
+extractors: #1st level entries match the raw .csv names in bonsai, 2nd level may be expt-specific parsers
+  Events:
+    Grid:  "v01"
+    Stick: "v09"
+  Touch_xy_bs:
+    Grid:  "v01"
+    Stick: "v01"
+
+food_url: "https://liveuclac-my.sharepoint.com/:x:/g/personal/ucqfech_ucl_ac_uk/ETtD1vieaelDsCivrRetzwABpnVp-t1Td5DCMU3P4CQANA?download=1"
 
 # Cutoff date for processing sessions
 cutoff_min: 
-  default: "1900-01-01"
+  default: "2025-01-01"

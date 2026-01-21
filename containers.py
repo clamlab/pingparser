@@ -16,6 +16,7 @@ class Experiment:
 
 class AnimalData:
     def __init__(self, name):
+        self.dfs = {} #container for different sliced dfs
         self.name = name
         self.subsess_paths = {}
         self.subsess = {}

@@ -15,15 +15,20 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 
 from datetime import datetime
 
-import pingparser.general as genparse
 import pingparser.scrapers as scrapers
 import pingparser.containers as containers
 import pyfun.bamboo as boo
 import pyfun.timestrings as timestr
 import pingparser.check as check
 
+from collections import defaultdict
+
 import glob
-import time
+
+#for accessing
+import requests
+import io
+
 
 # Load YAML config
 def setup_config(config_file):
@@ -34,12 +39,31 @@ def setup_config(config_file):
 
     return config
 
+def _path_creator(e_name, versioned_dir):
+    # Base paths
+    paths = {
+        'data':     os.path.join(versioned_dir, 'data'),
+        'metadata': os.path.join(versioned_dir, 'metadata'),
+    }
+
+    # Add 'big_df' path only for 'Events' #we don't really need omnibus table for trackers / file too big
+    if e_name == 'Events':
+        for s in ['big_df', 'session_stats']:
+            paths[s] = os.path.join(versioned_dir, s)
+
+    extractor_outputs = {'dirs':         paths,
+                         'proc_list_fn': os.path.join(versioned_dir, 'metadata', 'processed.csv'),
+                        }
+
+
+    return extractor_outputs
+
 def setup_paths(config):
     # TODO in theory dir creation only needs to be run first time. Unclear what is best practice for
     # TODO checking this.
 
 
-    # === common subdirec  tories ===
+    # === common subdirectories ===
     config['raw_dir']    = os.path.join(config['root_dir'], 'raw')
     config['output_dir'] = os.path.join(config['root_dir'], 'processed')
 
@@ -52,31 +76,19 @@ def setup_paths(config):
     extractor_output_paths = {}
 
     # Create versioned subdirectories for each extractor based on module name
-    for e_name, e_module in config['extractors'].items():
-        versioned_dir = os.path.join(config['output_dir'], e_name, e_module)
+    for extractor_name, extractor_group in config['extractors'].items():
+        extractor_output_paths[extractor_name] = {}
 
-        # Base paths
-        paths = {
-            'data': os.path.join(versioned_dir, 'data'),
-            'metadata': os.path.join(versioned_dir, 'metadata'),
-        }
-
-        # Add 'big_df' path only for 'Events' #we don't really need omnibus table for trackers / file too big
-        if e_name == 'Events':
-            for s in ['big_df', 'session_stats']:
-                paths[s] = os.path.join(versioned_dir, s)
-
-
-        # Assign to the extractor output paths
-        extractor_output_paths[e_name] = {
-            'dirs': paths,
-            'proc_list_fn': os.path.join(versioned_dir, 'metadata', 'processed.csv'),
-        }
+        for expt_name, module_version in extractor_group.items():
+            versioned_dir = os.path.join(config['output_dir'], extractor_name, expt_name, module_version)
+            paths = _path_creator(extractor_name, versioned_dir)
+            extractor_output_paths[extractor_name][expt_name] = paths
 
     # Create all directories in each entry
-    for paths_dict in extractor_output_paths.values():
-        for dir_path in paths_dict['dirs'].values():
-            os.makedirs(dir_path, exist_ok=True)
+    for extractor_name, extractor_group in extractor_output_paths.items():
+        for paths_dict in extractor_group.values():
+            for dir_path in paths_dict['dirs'].values():
+                os.makedirs(dir_path, exist_ok=True)
 
     config['paths'] = extractor_output_paths
     return config
@@ -107,67 +119,119 @@ def setup_logging(config, debug):
         datefmt="%H:%M:%S"  # Only show hours, minutes, seconds
     )
 
+    # === Add real-time counter for WARN/ERROR logs ===
+    class CounterHandler(logging.Handler):
+        def __init__(self):
+            super().__init__()
+            self.warning_count = 0
+            self.error_count = 0
+
+        def emit(self, record):
+            if record.levelno == logging.WARNING:
+                self.warning_count += 1
+            elif record.levelno == logging.ERROR:
+                self.error_count += 1
+
+    counter_handler = CounterHandler()
+    logging.getLogger().addHandler(counter_handler)
+
+    logging.warning_count = counter_handler.warning_count
+    logging.error_count = counter_handler.error_count
+    logging.counter_handler = counter_handler  # optional handle to retrieve later
+
 
 def init_containers(config):
-    expt = containers.Experiment()
-    expt.data_root = config['raw_dir']
-    for a in config['animal_names']:
-        expt.anim[a] = containers.AnimalData(a)
+    expt_all = {}
+    for expt_label, anims in config['animals'].items():
+        expt = containers.Experiment()
+        expt.data_root = config['raw_dir']
+        for a in anims:
+            expt.anim[a] = containers.AnimalData(a)
 
-    return expt
+        expt_all[expt_label] = expt
+
+    return expt_all
 
 def load_extractors(config):
-    extractors = {} #container for extractor modules
-    for e_name, e_ver in config['extractors'].items():
+    extractors = defaultdict(dict) #container for extractor modules
 
-        module_path = f"pingparser.extractors.{e_name}.{e_ver}"
-        try:
-            # Dynamically import the module
-            module = importlib.import_module(module_path)
+    for extractor_name, extractor_group in config['extractors'].items():
 
-            # Instantiate the Extractor class within the imported module
-            extractor_class = getattr(module, "Extractor")  # Assuming each module has an Extractor class
-            extractors[e_name] = extractor_class()  # Instantiate the class
+        for expt_name, module_version in extractor_group.items():
+            module_path = f"pingparser.extractors.{extractor_name}.{expt_name}.{module_version}"
 
-            # Logging successful import
-            logging.info(f'{e_name}: {module_path}')
+            try:
+                # Dynamically import the module
+                module = importlib.import_module(module_path)
 
-        except ModuleNotFoundError as e:
-            # Log error if the module cannot be found
-            logging.error(f"ModuleNotFoundError: Failed to import {module_path}. Error: {e}")
+                # Instantiate the Extractor class within the imported module
+                extractor_class = getattr(module, "Extractor")  # Assuming each module has an Extractor class
+                extractors[expt_name][extractor_name] = extractor_class()  # Instantiate the class
 
-        except ImportError as e:
-            # Log other import-related errors
-            logging.error(f"ImportError: Failed to import {module_path}. Error: {e}")
 
-        except AttributeError as e:
-            # Handle case where the module does not have an Extractor class
-            logging.error(f"AttributeError: {module_path} does not contain an 'Extractor' class. Error: {e}")
+                # Logging successful import
+                logging.info(f'{extractor_name}: {module_path}')
+
+            except ModuleNotFoundError as e:
+                # Log error if the module cannot be found
+                logging.error(f"ModuleNotFoundError: Failed to import {module_path}. Error: {e}")
+
+            except ImportError as e:
+                # Log other import-related errors
+                logging.error(f"ImportError: Failed to import {module_path}. Error: {e}")
+
+            except AttributeError as e:
+                # Handle case where the module does not have an Extractor class
+                logging.error(f"AttributeError: {module_path} does not contain an 'Extractor' class. Error: {e}")
 
     return extractors
 
-def load_file_paths(expt):
-    for anim_name, anim in expt.anim.items():
-        anim_root = os.path.join(expt.data_root, anim_name)
-        anim.subsess_paths, timestamp_errors = scrapers.get_subsess_paths(anim_name, anim_root, verbose=True)
+def load_file_paths(expt_all):
 
-        if len(timestamp_errors) > 0:
-            for error in timestamp_errors:
-                # Format each error (each error is a list with two elements)
-                formatted_error = f"Path: {error[0]}, File: {error[1]}"
-                logging.error(formatted_error)
+    for expt_label, expt in expt_all.items():
+        for anim_name, anim in expt.anim.items():
+            anim_root = os.path.join(expt.data_root, anim_name)
+            anim.subsess_paths, timestamp_errors = scrapers.get_subsess_paths(anim_name, anim_root, verbose=True)
 
-    return expt
+            if len(timestamp_errors) > 0:
+                for error in timestamp_errors:
+                    # Format each error (each error is a list with two elements)
+                    formatted_error = f"Path: {error[0]}, File: {error[1]}"
+                    logging.error(formatted_error)
+
+    return expt_all
+
+def load_food_info(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+
+        df = pd.read_csv(io.StringIO(response.text))
+        return df
+
+    except requests.exceptions.RequestException as req_err:
+        logging.error(f"Couldn't load food info from URL ({url}): {req_err}")
+    except pd.errors.ParserError as parse_err:
+        logging.error(f"Failed to parse CSV from URL ({url}): {parse_err}")
+    except Exception as e:
+        logging.error(f"Unexpected error loading food info: {e}")
+
+    # Return empty DataFrame on error so the program can continue
+    return pd.DataFrame()
+
+
+
 
 def load_processed_list(config):
-    proc_list = {}
-    for e_name in config['extractors']:
-        fn = config['paths'][e_name]['proc_list_fn']
+    proc_list = defaultdict(dict)
+    for extractor_name, extractor_group in config['extractors'].items():
+        for expt_name in extractor_group:
+            fn = config['paths'][extractor_name][expt_name]['proc_list_fn']
 
-        if not os.path.exists(fn):
-            logging.info(f"Processed list not found. Creating {fn}")
+            if not os.path.exists(fn):
+                logging.info(f"Processed list not found. Creating {fn}")
 
-        proc_list[e_name] = boo.read_csv_or_create(fn, colnames=['anim', 'sess', 'length'])
+            proc_list[expt_name][extractor_name] = boo.read_csv_or_create(fn, colnames=['anim', 'sess', 'length'])
 
     return proc_list
 
@@ -177,20 +241,26 @@ def save_session_data(session_file_path, df_sess):
     df_sess.to_csv(session_file_path, index=False)
     logging.info(f"Saved: {session_file_path}")
 
-def save_session_stats(session_stats_df, fn):
+def save_session_stats(session_stats_df, fn, col_dtypes):
     # Check if the file exists
+
+    # Filter dtypes to only those columns that exist in the DataFrame
+    valid_dtypes = {col: dtype for col, dtype in col_dtypes.items() if col in session_stats_df.columns}
+    session_stats_df = session_stats_df.astype(valid_dtypes)
+
+
     if os.path.exists(fn):
-        # Load existing data into old_session_stats_df
+        # Load existing data
         old_session_stats_df = pd.read_csv(fn)
+    else: #init empty df
+        old_session_stats_df = pd.DataFrame({col: pd.Series(dtype=dtype) for col, dtype in col_dtypes.items()})
 
-        # Concatenate the new and old DataFrames
-        combined_df = pd.concat([old_session_stats_df, session_stats_df])
+    # Concatenate the new and old DataFrames
+    combined_df = pd.concat([old_session_stats_df, session_stats_df])
 
-        # Drop duplicate rows based on the 'date' column, keeping the last occurrence
-        updated_df = combined_df.drop_duplicates(subset='date', keep='last')
-    else:
-        # If the file does not exist, use the current DataFrame
-        updated_df = session_stats_df
+    # Drop duplicate rows based on the 'date' column, keeping the last occurrence
+    updated_df = combined_df.drop_duplicates(subset='date', keep='last')
+
 
     # Save the updated DataFrame to a temporary file first
     temp_file = f"{fn}.temp"
@@ -211,13 +281,13 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
     """
     Preprocess and save each session, updating proc_list incrementally to ensure robustness.
     """
-    proc_list_path = config['paths'][extractor.TYPE]['proc_list_fn']  # Path to proc_list CSV file for this extractor
-    data_dir = config['paths'][extractor.TYPE]['dirs']['data']  # Directory for session data
+    proc_list_path = config['paths'][extractor.TYPE][extractor.EXPT_NAME]['proc_list_fn']  # Path to proc_list CSV file for this extractor
+    data_dir       = config['paths'][extractor.TYPE][extractor.EXPT_NAME]['dirs']['data']  # Directory for session data
 
     # Calculate the total work--quick and coarse way--doesn't pre-check if session already processed etc.
     total_work = sum(len(anim.subsess_paths) for anim in expt.anim.values())
 
-    with tqdm(total=total_work, desc=f"Preprocessing {extractor.TYPE}") as pbar, \
+    with tqdm(total=total_work, desc=f"Preprocessing {extractor.TYPE}.{extractor.EXPT_NAME}") as pbar, \
          ProcessPoolExecutor(max_workers=4) as extract_executor, \
          ThreadPoolExecutor(max_workers=4) as save_executor:
 
@@ -252,8 +322,6 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
                     pbar.update(1)
                     continue
 
-
-
                 # Define the full path for the session file in the correct directory
                 session_file_path = os.path.join(data_dir_anim, f"{subsess_name}.csv")
 
@@ -268,6 +336,7 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
 
             # === save each session (unmerged) separately as they get processed ===
             for future in as_completed(session_futures):
+
                 anim_name, subsess_name, session_file_path = session_futures[future]
 
                 # Retrieve the extracted data
@@ -283,17 +352,17 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
                 pbar.update(1)
             pbar.refresh()
 
-
-            # === ONLY FOR EVENTS: merge (sameday), then save, session stats ===
-            try:
-                merged_stats = merge_sameday_stats(subsess_stats)
-            except:
-                pass
-            # Convert dictionary to DataFrame
-            session_stats_df = pd.DataFrame.from_dict(merged_stats, orient='index').reset_index()
-            session_stats_df.rename(columns={'index': 'date'}, inplace=True)
-            fn = os.path.join(config['paths']['Events']['dirs']['session_stats'], f"{anim_name}.csv")
-            save_session_stats(session_stats_df, fn)
+            if extractor.TYPE=='Events':
+                # === ONLY FOR EVENTS: merge (sameday), then save, session stats ===
+                try:
+                    merged_stats = merge_sameday_stats(subsess_stats)
+                except:
+                    pass
+                # Convert dictionary to DataFrame
+                session_stats_df = pd.DataFrame.from_dict(merged_stats, orient='index').reset_index()
+                session_stats_df.rename(columns={'index': 'date'}, inplace=True)
+                fn = os.path.join(config['paths']['Events'][extractor.EXPT_NAME]['dirs']['session_stats'], f"{anim_name}.csv")
+                save_session_stats(session_stats_df, fn, extractor.SESS_STATS_DTYPES)
 
             # Append new entries to proc_list and save incrementally after each animal
             if new_entries:
@@ -311,12 +380,12 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
             anim.subsess = subsess  # Store processed data for the animal
 
     #check that processed list count matches existing files in directory
-    check_proc_list(proc_list, data_dir, config)
+    check_proc_list(proc_list, data_dir, config['animals'][extractor.EXPT_NAME])
 
     return proc_list, expt
 
 
-def check_proc_list(proc_list, data_dir, config):
+def check_proc_list(proc_list, data_dir, animals):
     """
     Checks the integrity of the proc_list:
     1. Verifies that the number of entries in proc_list equals the number of unique rows defined by 'anim' and 'sess'.
@@ -350,7 +419,7 @@ def check_proc_list(proc_list, data_dir, config):
     # Check 2: Total number of files across subfolders
 
     total_file_count = 0
-    for anim_name in config['animal_names']:
+    for anim_name in animals:
         anim_folder = os.path.join(data_dir, anim_name)
         if os.path.exists(anim_folder):
             total_file_count += sum(1 for f in os.listdir(anim_folder) if f.endswith('.csv'))
@@ -432,7 +501,7 @@ def merge_sameday_stats(subsess_stats):
 
         this_merged_stats['last_TrialType'] = merged_dict['last_TrialType'][latest_index]
 
-        for stat_name in ['n_correct', 'n_attempted', 'n_total']:
+        for stat_name in ['n_correct', 'n_attempted', 'n_total', 'total_milk_ul']:
             this_merged_stats[stat_name] = np.sum(merged_dict[stat_name])
 
         merged_stats[date] = this_merged_stats
@@ -455,29 +524,30 @@ def save_col_types(config, extractors, overwrite=True):
     # save column dtypes of extractor to metadata directory
     # useful when loading dfs later: newer pandas encourage / force explicit dtypes
 
-    for e_name, e in extractors.items():
-        fn = os.path.join(config['paths'][e_name]['dirs']['metadata'],
-                          'coltypes.yaml')
+    for expt_name, expt_extractors in extractors.items():
+        for extractor_name, this_extractor in expt_extractors.items():
+            fn = os.path.join(config['paths'][extractor_name][expt_name]['dirs']['metadata'],
+                                                                             'coltypes.yaml')
 
-        if os.path.exists(fn):
-            if overwrite:
-                logging.info(f"Overwriting {fn}")
-                pass
+            if os.path.exists(fn):
+                if overwrite:
+                    logging.info(f"Overwriting {fn}")
+                    pass
+                else:
+                    #file already created (should be done on first run)
+                    continue
             else:
-                #file already created (should be done on first run)
-                continue
-        else:
-            logging.info(f"Creating {fn}")
+                logging.info(f"Creating {fn}")
 
-        with open(fn, 'w') as f:
-            yaml.dump(e.COLUMN_DTYPES, f, default_flow_style=False)
+            with open(fn, 'w') as f:
+                yaml.dump(this_extractor.COLUMN_DTYPES, f, default_flow_style=False)
 
 
 # Merge all sessions to form omnibus df and save in parallel
-def create_omnibus(anim_name, anim, config, e_name):
+def create_omnibus(anim_name, anim, big_df_dir):
     # Concatenate the dataframes in the correct order
     big_df = boo.concat_df_dicts(anim.sess, reset_index=True)
-    fn = os.path.join(config['paths'][e_name]['dirs']['big_df'], anim_name + '.csv')
+    fn = os.path.join(big_df_dir, anim_name + '.csv')
     big_df.to_csv(fn, index=False)
     return anim_name, fn, big_df
 
@@ -491,13 +561,13 @@ def main(config_file, debug=False):
         setup_logging(config, debug)
 
         # Initialize containers for animal data
-        expt = init_containers(config)
+        expt_all = init_containers(config)
 
         # Load extractor modules
         extractors = load_extractors(config)
 
         # Load raw file paths, store in anim.subsess_paths for each animal
-        expt = load_file_paths(expt)
+        expt_all = load_file_paths(expt_all)
 
         # Load list of already pre-processed sessions
         proc_list = load_processed_list(config)
@@ -508,82 +578,140 @@ def main(config_file, debug=False):
 
 
         # Preprocess sessions, skipping those already in list, and update list
-        for e_name in config['extractors']:
-            logging.info(f"Processing {e_name}")
-            updated_proc_list, expt = preprocess(config, expt,
-                                                 extractors[e_name],
-                                                 proc_list[e_name], debug=debug)
+        for expt_name, expt in expt_all.items():
+            for extractor_name in extractors[expt_name]:
+                logging.info(f"Processing {expt_name} {extractor_name}")
 
-            proc_list[e_name] = updated_proc_list #this has already been saved in preprocess()
+                this_extractor = extractors[expt_name][extractor_name]
+                this_proc_list =  proc_list[expt_name][extractor_name]
+
+                updated_proc_list, expt = preprocess(config, expt,
+                                                     this_extractor,
+                                                     this_proc_list,
+                                                     debug=debug)
+
+                proc_list[expt_name][extractor_name] = updated_proc_list #this has already been saved in preprocess()
 
 
         # pull other metadata e.g. start and end time of session (across sub-sessions)
         # TODO: refactor as extractor? (but we don't need to save subsession info and may be overkill because the data format may be too sparse)
 
 
-        # reconstruct each subject's overall Events table. hacky for now,
-        e_name = 'Events' #possible to loop through a list of extractor names, but we only want omnibus for events
-        data_dir = config['paths'][e_name]['dirs']['data']
+        # reconstruct each subject's omnibus df. hacky for now: it loads all the individual saved session dfs, and merges, then saves.
+        extractor_name = 'Events' #possible to loop through a list of extractor names, but we only want omnibus for events (for now)
+        this_extractor_paths = config['paths'][extractor_name]
 
-        total_work = len(expt.anim)
+        for expt_name in this_extractor_paths:
 
-        with tqdm(total=total_work, desc=f"Pulling {e_name} sessions") as pbar:
-            for anim_name in config['animal_names']:
-                anim_folder = os.path.join(data_dir, anim_name)
-                anim_files = glob.glob(os.path.join(anim_folder, "*.csv"))
-
-                dfs_by_timestr = {}
-
-                with ThreadPoolExecutor(max_workers=16) as executor: #parallel processing
-                    future_to_file = {executor.submit(load_file_for_omnibus, f): f for f in anim_files}
-
-                    for future in as_completed(future_to_file):
-                        datetime_str, df = future.result()
-                        if df is not None:
-                            dfs_by_timestr[datetime_str] = df
-
-                merged_sessions = merge_sameday_sessions(dfs_by_timestr)
-
-                expt.anim[anim_name].subsess = dfs_by_timestr
-                expt.anim[anim_name].sess    = merged_sessions
-                pbar.update(1)
+            data_dir   = this_extractor_paths[expt_name]['dirs']['data']
+            big_df_dir = this_extractor_paths[expt_name]['dirs']['big_df']
+            expt = expt_all[expt_name]
 
 
-        with tqdm(total=total_work, desc=f"Saving {e_name} omnibus") as pbar:
-            with ThreadPoolExecutor(max_workers=16) as executor:
-                # Prepare the futures for parallel execution
-                futures = {
-                    executor.submit(create_omnibus, anim_name, anim, config, e_name): anim_name
-                    for anim_name, anim in expt.anim.items()
-                }
+            total_work = len(expt.anim)
 
-                # Process the results as they complete
-                for future in as_completed(futures):
-                    anim_name = futures[future]  # Retrieve the associated animal name
-                    try:
-                        anim_name, file_path, big_df = future.result()
-                        expt.anim[anim_name].big_df = big_df
-                        logging.info(f"Saved omnibus dataframe for {anim_name} to {file_path}")
-                    except Exception as e:
-                        logging.error(f"Failed to save dataframe for {anim_name}. Error: {e}")
+            with tqdm(total=total_work, desc=f"Pulling {extractor_name}.{expt_name} sessions") as pbar:
+                for anim_name in expt.anim:
+                    anim_folder = os.path.join(data_dir, anim_name)
+                    anim_files = glob.glob(os.path.join(anim_folder, "*.csv"))
 
+                    dfs_by_timestr = {}
+
+                    with ThreadPoolExecutor(max_workers=16) as executor: #parallel processing
+                        future_to_file = {executor.submit(load_file_for_omnibus, f): f for f in anim_files}
+
+                        for future in as_completed(future_to_file):
+                            datetime_str, df = future.result()
+                            if df is not None:
+                                dfs_by_timestr[datetime_str] = df
+
+                    merged_sessions = merge_sameday_sessions(dfs_by_timestr)
+
+                    expt.anim[anim_name].subsess = dfs_by_timestr
+                    expt.anim[anim_name].sess    = merged_sessions
                     pbar.update(1)
 
-        pbar.refresh()
 
-        err_msgs = check.merged_df_lens(expt, verbose=False)  # sanity check
-        if err_msgs:
-            prefix = 'Omnibus merge length: '
-            for err_msg in err_msgs:
-                logging.error(prefix + err_msg)
-        else:
-            logging.info(f"Omnibus merge length checks passed: {e_name}")
+            with tqdm(total=total_work, desc=f"Saving {extractor_name}.{expt_name} omnibus") as pbar:
+                with ThreadPoolExecutor(max_workers=16) as executor:
+                    # Prepare the futures for parallel execution
+                    futures = {
+                        executor.submit(create_omnibus, anim_name, anim, big_df_dir): anim_name
+                        for anim_name, anim in expt.anim.items()
+                    }
 
+                    # Process the results as they complete
+                    for future in as_completed(futures):
+                        anim_name = futures[future]  # Retrieve the associated animal name
+                        try:
+                            anim_name, file_path, big_df = future.result()
+                            expt.anim[anim_name].big_df = big_df
+                            logging.info(f"Saved omnibus dataframe for {anim_name} to {file_path}")
+                        except Exception as e:
+                            logging.error(f"Failed to save dataframe for {anim_name}. Error: {e}")
+
+                        pbar.update(1)
+
+            pbar.refresh()
+
+            err_msgs = check.merged_df_lens(expt, verbose=False)  # sanity check
+            if err_msgs:
+                prefix = 'Omnibus merge length: '
+                for err_msg in err_msgs:
+                    logging.error(prefix + err_msg)
+            else:
+                logging.info(f"Omnibus merge length checks passed: {extractor_name}")
+
+
+        # add food / shift / rig info to sess_stats
+        food_info = load_food_info(config['food_url'])
+
+        extractor_name = 'Events' # possible to loop through a list of extractor names, but we only want omnibus for events (for now)
+        this_extractor_paths = config['paths'][extractor_name]
+
+        for expt_name in this_extractor_paths:
+            stats_coltypes = extractors[expt_name][extractor_name].SESS_STATS_DTYPES
+            session_stats_path = this_extractor_paths[expt_name]['dirs']['session_stats']
+            sess_stats_files = glob.glob(os.path.join(session_stats_path, "*.csv"))
+
+            for filepath in sess_stats_files:
+                anim_name = os.path.basename(filepath).split('.')[0]
+                anim_food_info = boo.slice(food_info, {'ID': [anim_name]})
+
+                anim_sess_stats = pd.read_csv(filepath, dtype=stats_coltypes)
+
+
+                info_cols = ['rig', 'shift', 'food']
+                #get dates with missing food/shift info
+                missing_dates = anim_sess_stats[anim_sess_stats[info_cols].isna().all(axis=1)]['date']
+                for row_num, datestr in missing_dates.items():
+                    food_row = boo.slice(anim_food_info, {'date': [datestr]})
+
+                    if len(food_row) == 0:
+                        continue
+                    elif len(food_row) > 1:
+                        msg = f"{anim_name} has duplicate food info for {datestr}"
+                        logging.warning(msg)
+
+                    food_row = food_row.iloc[-1]
+
+                    for col_name in info_cols:
+                        anim_sess_stats.loc[row_num, col_name] = food_row[col_name]
+
+                anim_sess_stats.to_csv(filepath, index=False)
 
         logging.info("Processing completed successfully.")
 
     except Exception as e:
         logging.error(f"Error during processing: {str(e)}", exc_info=True)
+
+
+        # reconstruct each subject's omnibus df. hacky for now: it loads all the individual saved session dfs, and merges, then saves.
+        extractor_name = 'Events' #possible to loop through a list of extractor names, but we only want omnibus for events (for now)
+        this_extractor_paths = config['paths'][extractor_name]
+
+
+
 
 
 if __name__ == "__main__":
@@ -600,14 +728,14 @@ if __name__ == "__main__":
 
     singleton = SingletonInstance(lock_file, script_name)
     singleton.acquire_lock()
-        # Ensure the lock is released when the script exits
+    # Ensure the lock is released when the script exits
     atexit.register(singleton.release_lock)
 
-    # =========== b =======================================================================================
+    # ==================================================================================================
 
 
     # Default config file for debugging
-    default_config_path = 'configs/config_v08.yaml'
+    default_config_path = 'configs/config_v09.yaml'
 
     parser = argparse.ArgumentParser(description='Run auto processing with configuration.')
     parser.add_argument('--config', type=str, default=default_config_path, help='Path to the config file')
@@ -620,3 +748,5 @@ if __name__ == "__main__":
 
     # Run the main function with the specified config (defaulting to v05)
     main(args.config, debug=args.debug)
+    print("Warnings:", logging.counter_handler.warning_count)
+    print("Errors:", logging.counter_handler.error_count)
