@@ -271,7 +271,17 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
                 anim_name, subsess_name, session_file_path = session_futures[future]
 
                 # Retrieve the extracted data
-                df_sess, df_sess_stats = future.result()
+                try:
+                    df_sess, df_sess_stats = future.result()
+                except Exception as e:
+                    logging.error(
+                        "Extractor failed %s %s %s %s",
+                        extractor.TYPE,
+                        anim_name,
+                        subsess_name,
+                        type(e).__name__,
+                    )
+                    raise  # kills the program
                 subsess[subsess_name] = df_sess
 
                 subsess_stats[subsess_name] = df_sess_stats
