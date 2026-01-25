@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: pingparser
+Version: 0.1.0
+Summary: Pre-processing pipeline for Bonsai experiment data
+Requires-Python: >=3.9
+License-File: LICENSE
+Dynamic: license-file

@@ -11,3 +11,9 @@ at different times within the trial
 * hence, the bulk of the wrangling is to put it into a trial by trial format
 * in contrast, most other people do this wrangling within Bonsai itself to give a clean trial by trial output
   * e.g. a single Zip containing 20+ parameters
+
+-----
+
+### dependencies
+(during development, install in this project's venv, with pip install -e ...)
+* clamlab/pyfun
