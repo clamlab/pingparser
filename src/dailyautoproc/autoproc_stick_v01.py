@@ -183,7 +183,7 @@ def save_session_stats(session_stats_df, fn):
         combined_df = pd.concat([old_session_stats_df, session_stats_df])
 
         # Drop duplicate rows based on the 'date' column, keeping the last occurrence
-        updated_df = combined_df.drop_duplicates(subset='date', keep='last')
+        updated_df = combined_df.drop_duplicates(subset=['date','TrialType'], keep='last')
     else:
         # If the file does not exist, use the current DataFrame
         updated_df = session_stats_df
@@ -292,12 +292,23 @@ def preprocess(config, expt, extractor, proc_list, batch_save_interval=10, debug
 
             # === ONLY FOR EVENTS: merge (sameday), then save, session stats ===
             try:
-                merged_stats = merge_sameday_stats(subsess_stats)
+                merged_stats = merge_sameday_stats_by_trialtype(subsess_stats)
             except:
                 pass
             # Convert dictionary to DataFrame
-            session_stats_df = pd.DataFrame.from_dict(merged_stats, orient='index').reset_index()
-            session_stats_df.rename(columns={'index': 'date'}, inplace=True)
+
+            if merged_stats:
+                session_stats_df = (
+                    pd.DataFrame.from_records(merged_stats)
+                    .sort_values(["date", "TrialType"])
+                    .reset_index(drop=True)
+                )
+            else:
+                session_stats_df = pd.DataFrame(columns=[
+                    "date", "TrialType", "start_time", "end_time",
+                    "n_correct", "n_attempted", "n_total", "stat", "stat_value"
+                ])
+
             fn = os.path.join(config['paths']['Events']['dirs']['session_stats'], f"{anim_name}.csv")
             save_session_stats(session_stats_df, fn)
 
@@ -448,6 +459,94 @@ def merge_sameday_stats(subsess_stats):
     return merged_stats
 
 
+def merge_sameday_stats_by_trialtype(subsess_stats):
+    # keys -> datetime objects
+    subsess_stats = {timestr.search(k)[1]: v for k, v in subsess_stats.items()}
+    grouped_dates = boo.group_datetime_objects_by_date(subsess_stats.keys())
+
+    # accumulator keyed by (day, TrialType)
+    acc = {}
+
+    for day, sess_times in grouped_dates.items():
+        for s in sorted(sess_times):  # chronological across sessions
+            per_session_list = subsess_stats.get(s, [])
+            for i, d in enumerate(per_session_list):  # preserves "later in list"
+                tt = d.get("TrialType", None)
+                if tt is None or (isinstance(tt, float) and np.isnan(tt)):
+                    tt = "UNKNOWN"
+
+                key = (day, tt)
+                if key not in acc:
+                    acc[key] = {
+                        "_earliest": pd.NaT,
+                        "_latest": pd.NaT,
+                        "n_correct": 0,
+                        "n_attempted": 0,
+                        "n_total": 0,
+                        "stat": None,
+                        "stat_value": None,
+                    }
+
+                a = acc[key]
+
+                # times
+                st = pd.to_datetime(d.get("start_time", pd.NaT), errors="coerce")
+                et = pd.to_datetime(d.get("end_time", pd.NaT), errors="coerce")
+                if pd.notna(st):
+                    a["_earliest"] = st if pd.isna(a["_earliest"]) else min(a["_earliest"], st)
+                if pd.notna(et):
+                    a["_latest"] = et if pd.isna(a["_latest"]) else max(a["_latest"], et)
+
+                # sums
+                a["n_correct"]   += int(d.get("n_correct", 0) or 0)
+                a["n_attempted"] += int(d.get("n_attempted", 0) or 0)
+                a["n_total"]     += int(d.get("n_total", 0) or 0)
+
+                # last stat/stat_value wins (later session, later in list)
+                if "stat" in d:
+                    a["stat"] = d["stat"]
+                if "stat_value" in d:
+                    a["stat_value"] = d["stat_value"]
+
+    # emit rows (one per date/trialtype)
+    out_rows = []
+    for (day, tt), a in sorted(acc.items(), key=lambda x: (x[0][0], x[0][1])):
+        out_rows.append({
+            "date": day.strftime("%Y-%m-%d"),
+            "TrialType": tt,
+            "start_time": a["_earliest"].strftime("%H:%M") if pd.notna(a["_earliest"]) else None,
+            "end_time": a["_latest"].strftime("%H:%M") if pd.notna(a["_latest"]) else None,
+            "n_correct": a["n_correct"],
+            "n_attempted": a["n_attempted"],
+            "n_total": a["n_total"],
+            "stat": a["stat"],
+            "stat_value": a["stat_value"],
+        })
+
+    return out_rows
+
+
+def merged_stats_to_df(merged_stats):
+    """
+    Flatten merged_stats into one row per (date, TrialType).
+    """
+    rows = []
+    for date, per_tt in merged_stats.items():
+        for trialtype, stats in per_tt.items():
+            rows.append({"date": date, "TrialType": trialtype, **stats})
+
+    df = pd.DataFrame(rows)
+
+    # optional: nice ordering + sorting
+    if not df.empty:
+        df = df.sort_values(["date", "TrialType"]).reset_index(drop=True)
+        preferred = ["date", "TrialType", "start_time", "end_time",
+                     "n_correct", "n_attempted", "n_total", "stat", "stat_value"]
+        df = df[[c for c in preferred if c in df.columns] +
+                [c for c in df.columns if c not in preferred]]
+
+    return df
+
 def load_file_for_omnibus(file_path):
     """Loads a file and returns its timestamp and DataFrame."""
     datetime_str = os.path.basename(file_path).split('.')[0]
@@ -593,7 +692,7 @@ def main(config_file, debug=False):
 
 
 if __name__ == "__main__":
-    default_config_path = 'configs/config_v10.yaml' # if directly running from IDE run button
+    default_config_path = 'configs/config_v11.yaml' # if directly running from IDE run button
 
     # Example usage: python autoproc.py --config configs/config_v05.yaml
 

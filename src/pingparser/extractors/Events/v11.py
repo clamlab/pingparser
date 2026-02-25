@@ -42,7 +42,7 @@ from math import isfinite #test whether nan
 
 class Extractor:
     VERSION = "touch_v10"
-    DATE = "01.25.26"
+    DATE = "02.24.26"
     TYPE = 'Events'
     EXPT = 'Stick'
 
@@ -94,24 +94,14 @@ class Extractor:
 
 
 
-    KEY_RESULT_NAME = {
-        "0_Port": None,
-        "1_RandomSnout": None,
-        "2_FixSnoutOnly": None,
-        "3_FixShrink": 'snout_x_min',
-        "4_FixCue": None,
-        "5_FixCueShrink": 'Cue_D',
-        "5b_FixCueStairs": 'Cue_D',
-        "6_FullscreenResp": None,
-        "7_FixDur": 'FixationDur',
-        "8_Stick": None,
-        "9_WM0": 'RespError_cuefrac',
-        "10_WM3": 'RespError_cuefrac',
-        "11_WM3_alphaStep": 'CueAlpha_WMOn',
-        "12_WM3_alphaSlope": 'CueAlpha_WMOff',
-        "13_WMx_alphaStep": 'RespError_cuefrac',
-        "14_WMx_alphaSlope": 'RespError_cuefrac'
+
+    SHAPING_MAIN_STATS = {
+        'FixDur': 'FixationDur',
+        'FixShrink': 'snout_y_max',
+        'CueShrink': 'Cue_D',
     }
+
+    STATS_FROM_RAW = ['snout_y_max'] #from shaping_main_stats, which to look from raw file
 
 
 
@@ -143,11 +133,11 @@ class Extractor:
 
 
         df_sess_raw = genparse.read_raw(fn)  # Load raw data
-        sess_stats = {}
+        sess_stats_by_TrialType = [] #container of dicts, one per trialtype in session
 
 
         if len(df_sess_raw) == 0:
-            return pd.DataFrame(), sess_stats
+            return pd.DataFrame(), sess_stats_by_TrialType
 
 
         #for some sessions, no value of reward_max_ms was pinged. Hacky way of inserting it
@@ -196,7 +186,7 @@ class Extractor:
         df_sess = df_sess.astype(self.COLUMN_DTYPES)
 
         if df_sess.empty:
-            return pd.DataFrame(), sess_stats
+            return pd.DataFrame(), sess_stats_by_TrialType
 
         # === Compute running values for the entire session ===
         running_vals = self._running_valuator(df_sess_raw)
@@ -232,38 +222,57 @@ class Extractor:
         # Post-process the session data
         df_sess = self._post_processor(df_sess)
 
-
-
-        # === get per-session data ===
-
+        # === get per-session summary stats ===
         #   instead of one row per trial, it's a single row of session stats
 
-        #  session start and end times
-        trial_1 = boo.slice(df_sess_raw, {'TrialNum': [1]})
-            #trial 1 is after all the checks have passed--trial 0 is when bonsai has just started
-        try:
-            sess_stats['start_time'] = trial_1['Timestamp'].iloc[0]
-        except IndexError:
-            sess_stats['start_time'] = df_sess_raw['Timestamp'].iloc[0]
+        # split by trial type
+        for TrialType, df_trialtype in df_sess.groupby('TrialType'):
+            sess_stats = {'TrialType': TrialType}
 
-        sess_stats['end_time'] = df_sess_raw.iloc[-1]['Timestamp']
+            # start and end times
+            trialnums = {'first': df_trialtype['TrialNum'].iloc[0],
+                         'last' : df_trialtype['TrialNum'].iloc[-1]}
 
-        for t in ['start_time', 'end_time']:
-            sess_stats[t] = sess_stats[t] # TODO ????? USELESS CODE?
+            trials = {'first': boo.slice(df_sess_raw, {'TrialNum': [trialnums['first']]}),
+                      'last':  boo.slice(df_sess_raw, {'TrialNum': [trialnums['last']]}) }
 
-        try:
-            sess_stats['last_TrialType'] = df_sess['TrialType'].iloc[-1]
-        except IndexError:
-            sess_stats['last_TrialType'] = None
+            try:
+                sess_stats['start_time'] = trials['first']['Timestamp'].iloc[0]
+            except IndexError:
+                sess_stats['start_time'] = None
 
-        sess_stats['n_correct']   = df_sess['correct'].sum()
-        sess_stats['n_attempted'] = df_sess['lapse_type'].isna().sum() # TODO: handle last trial gracefully
-        sess_stats['n_attempted'] = max(sess_stats['n_correct'], sess_stats['n_attempted']) #TODO-- really hacky!!
-                                    #problem is how to handle last trial.
-        sess_stats['n_total']     = df_sess.TrialNum.max() #TODO: handle last trial gracefully
+            try:
+                sess_stats['end_time'] = trials['last']['Timestamp'].iloc[0]
+            except IndexError:
+                sess_stats['end_time'] = None
 
+            sess_stats['n_correct']   = df_trialtype['correct'].sum()
+            sess_stats['n_attempted'] = df_trialtype['lapse_type'].isna().sum() # TODO: handle last trial gracefully
+            sess_stats['n_attempted'] = max(sess_stats['n_correct'], sess_stats['n_attempted']) #TODO-- really hacky!!
+                                        #problem is how to handle last trial.
+            sess_stats['n_total']     = len(df_trialtype) #TODO: handle last trial gracefully
 
-        return df_sess, sess_stats
+            # grab main stat
+            sess_stats['stat'] = 'None'
+            sess_stats['stat_value'] = 0
+            for s,v in self.SHAPING_MAIN_STATS.items():
+                if s not in TrialType:
+                    continue
+
+                # stat matched
+                sess_stats['stat'] = v
+                if v in self.STATS_FROM_RAW:
+                    val = boo.slice(df_sess_raw,{'Subject':[v]})
+                    if len(val)>0:
+                        sess_stats['stat_value'] = int(val['Value'].iloc[-1])
+                else:
+                    sess_stats['stat_value'] = df_trialtype[v].iloc[-1]
+
+                break #exit for loop because key stat found
+
+            sess_stats_by_TrialType.append(sess_stats)
+
+        return df_sess, sess_stats_by_TrialType
 
     def _calc_trial_dur(self, df_trial, start_event='ModEvent', end_event='Trial_ended'):
         """Calculate start and end times of trial."""
