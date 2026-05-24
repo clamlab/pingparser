@@ -90,7 +90,18 @@ animal_names:
 - "EC78"
 - "EC79"
 - "EC80"
-
+- "EC81"
+- "EC82"
+- "EC83"
+- "EC84"
+- "EC85"
+- "EC86"
+- "EC87"
+- "EC88"
+- "EC89"
+- "EC90"
+- "EC91"
+- "EC92"
 
 # Extractor modules and their versions
 extractor_path: "../extractors"
