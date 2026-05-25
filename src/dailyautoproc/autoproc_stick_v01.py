@@ -692,7 +692,7 @@ def main(config_file, debug=False):
 
 
 if __name__ == "__main__":
-    default_config_path = 'configs/config_v11.yaml' # if directly running from IDE run button
+    default_config_path = 'configs/config_v12.yaml' # if directly running from IDE run button
 
     # Example usage: python autoproc.py --config configs/config_v05.yaml
 
