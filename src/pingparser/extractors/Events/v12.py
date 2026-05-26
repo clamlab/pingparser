@@ -512,9 +512,9 @@ class Extractor:
 
 
         # === Extract trial individual params ===
-        for param in ['ITI', 'RespError_cuefrac', 'CueFadeDur','sleap_snout_score', 'sleap_body_score']:
+        for param in ['ITI', 'RespError_cuefrac', 'CueFadeDur']:
             row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='strict')
-        for param in ['Welzl_D', 'FixationGraceDur']:
+        for param in ['Welzl_D', 'FixationGraceDur', 'sleap_snout_score', 'sleap_body_score']:
             row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='float', single='last')
         for param in ['warmup_state']:
             row_holder.loc[param, 'val'] = genparse.get_trial_param(df_trial, param, dtype='int', single='last')
